@@ -1,0 +1,68 @@
+.terminal {
+  position: relative;
+  flex: none;
+  width: 45em;
+  height: 25em;
+  overflow: hidden;
+  font-family: var(--font-dos), monospace;
+  font-size: min(calc(100vw / 45), calc(100dvh / 25));
+  font-synthesis: none;
+  font-variant-ligatures: none;
+  line-height: 1;
+  white-space: pre;
+  -webkit-font-smoothing: none;
+}
+
+@media (min-width: 720px) and (min-height: 400px) {
+  .terminal {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1440px) and (min-height: 800px) {
+  .terminal {
+    font-size: 32px;
+  }
+}
+
+@media (min-width: 2160px) and (min-height: 1200px) {
+  .terminal {
+    font-size: 48px;
+  }
+}
+
+@media (min-width: 2880px) and (min-height: 1600px) {
+  .terminal {
+    font-size: 64px;
+  }
+}
+
+@media (min-width: 3600px) and (min-height: 2000px) {
+  .terminal {
+    font-size: 80px;
+  }
+}
+
+.row {
+  height: 1em;
+  overflow: hidden;
+}
+
+.cursor {
+  position: absolute;
+  width: 0.5625em;
+  height: 0.125em;
+  animation: blink 0.5s step-end infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}

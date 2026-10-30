@@ -3,10 +3,10 @@ import { expect, test } from "vitest";
 
 import Home from "./page";
 
-test("renders a single empty main viewport", () => {
+test("renders the terminal in a single main viewport", () => {
   const markup = renderToStaticMarkup(<Home />);
 
   expect(markup.match(/<main\b/g)).toHaveLength(1);
   expect(markup).not.toMatch(/<(a|nav|button|img)\b/);
-  expect(markup.replace(/<[^>]*>/g, "").trim()).toBe("");
+  expect(markup).toContain("ODD/OS Version 3.14");
 });

@@ -1,5 +1,21 @@
 :root {
-  --screen-background: #000;
+  --dos-black: #000000;
+  --dos-blue: #0000aa;
+  --dos-green: #00aa00;
+  --dos-cyan: #00aaaa;
+  --dos-red: #aa0000;
+  --dos-magenta: #aa00aa;
+  --dos-brown: #aa5500;
+  --dos-light-grey: #aaaaaa;
+  --dos-dark-grey: #555555;
+  --dos-light-blue: #5555ff;
+  --dos-light-green: #55ff55;
+  --dos-light-cyan: #55ffff;
+  --dos-light-red: #ff5555;
+  --dos-light-magenta: #ff55ff;
+  --dos-yellow: #ffff55;
+  --dos-white: #ffffff;
+  --screen-background: var(--dos-black);
 }
 
 html,
