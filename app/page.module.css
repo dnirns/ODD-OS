@@ -1,0 +1,5 @@
+.screen {
+  position: fixed;
+  inset: 0;
+  background: var(--screen-background);
+}
