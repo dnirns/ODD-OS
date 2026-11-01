@@ -7,6 +7,7 @@ import {
   moveCursor,
   ROWS,
   type Screen,
+  scrollUp,
   setCursorVisible,
   toRuns,
   writeText,
@@ -179,5 +180,51 @@ describe("toRuns", () => {
     );
 
     expect(total).toBe(COLUMNS);
+  });
+});
+
+describe("scrollUp", () => {
+  const numbered = Array.from({ length: ROWS }).reduce<Screen>(
+    (screen, _, row) => writeText(screen, row, 0, `row ${row}`),
+    createScreen(),
+  );
+
+  test("moves every row up and discards the top row", () => {
+    const scrolled = scrollUp(numbered);
+
+    expect(rowText(scrolled, 0).trimEnd()).toBe("row 1");
+    expect(rowText(scrolled, ROWS - 2).trimEnd()).toBe(`row ${ROWS - 1}`);
+    expect(
+      scrolled.rows.some((_, row) => rowText(scrolled, row).trimEnd() === "row 0"),
+    ).toBe(false);
+  });
+
+  test("leaves a blank default-coloured bottom row", () => {
+    const scrolled = scrollUp(writeText(numbered, ROWS - 1, 0, "x", { fg: "yellow" }));
+
+    expect(scrolled.rows[ROWS - 1]).toEqual(createScreen().rows[ROWS - 1]);
+  });
+
+  test("keeps coloured text's colours in its new row", () => {
+    const screen = writeText(createScreen(), 1, 0, "x", { fg: "yellow", bg: "blue" });
+
+    expect(scrollUp(screen).rows[0][0]).toEqual({ char: "x", fg: "yellow", bg: "blue" });
+  });
+
+  test("does not move the cursor", () => {
+    const screen = moveCursor(numbered, 10, 20);
+
+    expect(scrollUp(screen).cursor).toEqual(screen.cursor);
+  });
+
+  test.each([1, 3, ROWS, ROWS + 5])("keeps the grid size after %i rows", (count) => {
+    const { rows } = scrollUp(numbered, count);
+
+    expect(rows).toHaveLength(ROWS);
+    expect(rows.every((cells) => cells.length === COLUMNS)).toBe(true);
+  });
+
+  test.each([ROWS, ROWS + 5])("blanks the screen when scrolled by %i rows", (count) => {
+    expect(scrollUp(numbered, count).rows).toEqual(createScreen().rows);
   });
 });

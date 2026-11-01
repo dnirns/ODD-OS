@@ -74,8 +74,10 @@ describe("createBootSteps", () => {
     const devices = firstScreenWith("Fixed Disk 0");
     const starting = firstScreenWith("Starting ODD/OS...");
     const path = firstScreenWith("C>PATH C:\\DOS");
+    const doskey = firstScreenWith("C>DOSKEY /INSERT");
+    const installed = firstScreenWith("DOSKey installed.");
     const promptCommand = firstScreenWith("C>PROMPT $P$G");
-    const prompt = screens.findIndex((screen) => rowText(screen, 4) === "C:\\>");
+    const prompt = screens.findIndex((screen) => rowText(screen, 6) === "C:\\>");
 
     expect(video).toBeGreaterThan(0);
     expect(video).toBeLessThan(header);
@@ -83,7 +85,9 @@ describe("createBootSteps", () => {
     expect(memory).toBeLessThan(devices);
     expect(devices).toBeLessThan(starting);
     expect(starting).toBeLessThan(path);
-    expect(path).toBeLessThan(promptCommand);
+    expect(path).toBeLessThan(doskey);
+    expect(doskey).toBeLessThan(installed);
+    expect(installed).toBeLessThan(promptCommand);
     expect(promptCommand).toBeLessThan(prompt);
   });
 
@@ -157,8 +161,15 @@ describe("createBootSteps", () => {
   test("echoes the AUTOEXEC.BAT commands above the final prompt", () => {
     expect(rowText(finalScreen, 0)).toBe("Starting ODD/OS...");
     expect(rowText(finalScreen, 2)).toBe("C>PATH C:\\DOS");
-    expect(rowText(finalScreen, 3)).toBe("C>PROMPT $P$G");
-    expect(rowText(finalScreen, 4)).toBe("C:\\>");
+    expect(rowText(finalScreen, 3)).toBe("C>DOSKEY /INSERT");
+    expect(rowText(finalScreen, 4)).toBe("DOSKey installed.");
+    expect(rowText(finalScreen, 5)).toBe("C>PROMPT $P$G");
+    expect(rowText(finalScreen, 6)).toBe("C:\\>");
+    expect(finalScreen.cursor).toEqual({ row: 6, column: 4, visible: true });
+  });
+
+  test("takes 12 seconds", () => {
+    expect(totalDelay(steps)).toBe(12000);
   });
 
   test("takes between 10 and 14 seconds", () => {

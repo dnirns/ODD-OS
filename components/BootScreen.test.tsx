@@ -6,7 +6,7 @@ import BootScreen from "./BootScreen";
 const stripTags = (markup: string) => markup.replace(/<[^>]*>/g, "");
 
 test("server-renders 25 blank rows with no cursor", () => {
-  const markup = renderToStaticMarkup(<BootScreen />);
+  const markup = renderToStaticMarkup(<BootScreen onComplete={() => {}} />);
 
   expect(markup.match(/class="[^"]*row[^"]*"/g)).toHaveLength(25);
   expect(stripTags(markup)).toBe(" ".repeat(2000));

@@ -7,6 +7,7 @@ import {
   setCursorVisible,
   writeText,
 } from "../terminal/screen";
+import { PROMPT } from "../shell/prompt";
 
 export type BootStep = {
   readonly delayMs: number;
@@ -25,9 +26,8 @@ const MEMORY_TEST_MS = 3200;
 
 const MEMORY_ROW = 7;
 const SKIP_PROMPT_ROW = 24;
-const PROMPT_ROW = 4;
+const PROMPT_ROW = 6;
 const DEFAULT_PROMPT = "C>";
-const PROMPT = "C:\\>";
 
 const show = (
   delayMs: number,
@@ -101,8 +101,10 @@ export const createBootSteps = ({
         true,
       ),
   },
-  show(2300, 3, [2, `${DEFAULT_PROMPT}PATH C:\\DOS`]),
-  show(800, PROMPT_ROW, [3, `${DEFAULT_PROMPT}PROMPT $P$G`]),
+  show(1800, 3, [2, `${DEFAULT_PROMPT}PATH C:\\DOS`]),
+  show(500, 4, [3, `${DEFAULT_PROMPT}DOSKEY /INSERT`]),
+  show(300, 5, [4, "DOSKey installed."]),
+  show(500, PROMPT_ROW, [5, `${DEFAULT_PROMPT}PROMPT $P$G`]),
   {
     delayMs: 900,
     apply: (screen) =>

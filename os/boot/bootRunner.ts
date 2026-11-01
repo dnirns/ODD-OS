@@ -5,7 +5,7 @@ export type BootRunnerOptions = {
   readonly screen: Screen;
   readonly steps: readonly BootStep[];
   readonly onScreen: (screen: Screen) => void;
-  readonly onComplete: () => void;
+  readonly onComplete: (screen: Screen) => void;
 };
 
 export type BootHandle = {
@@ -36,8 +36,9 @@ export const startBoot = ({
 
     const step = steps[state.next];
     if (!step) {
+      const finalScreen = state.screen;
       finish();
-      onComplete();
+      onComplete(finalScreen);
       return;
     }
 
@@ -60,7 +61,7 @@ export const startBoot = ({
       const finalScreen = applySteps(state.screen, steps.slice(state.next));
       finish();
       onScreen(finalScreen);
-      onComplete();
+      onComplete(finalScreen);
     },
     stop: () => {
       if (state.status === "running") finish();

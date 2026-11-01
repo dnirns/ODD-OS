@@ -1,13 +1,16 @@
-"use client";
-
 import { useEffect, useState } from "react";
 
 import { isSkipKey } from "../os/boot/bootKeys";
 import { startBoot } from "../os/boot/bootRunner";
 import { createBootScreen, createBootSteps } from "../os/boot/bootSteps";
+import type { Screen } from "../os/terminal/screen";
 import Terminal from "./Terminal";
 
-const BootScreen = () => {
+type BootScreenProps = {
+  onComplete: (screen: Screen) => void;
+};
+
+const BootScreen = ({ onComplete }: BootScreenProps) => {
   const [screen, setScreen] = useState(createBootScreen);
 
   useEffect(() => {
@@ -25,7 +28,10 @@ const BootScreen = () => {
       screen: createBootScreen(),
       steps: createBootSteps({ reducedMotion }),
       onScreen: setScreen,
-      onComplete: removeListener,
+      onComplete: (finalScreen) => {
+        removeListener();
+        onComplete(finalScreen);
+      },
     });
     window.addEventListener("keydown", onKeyDown);
 
@@ -33,7 +39,7 @@ const BootScreen = () => {
       boot.stop();
       removeListener();
     };
-  }, []);
+  }, [onComplete]);
 
   return <Terminal screen={screen} />;
 };

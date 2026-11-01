@@ -76,6 +76,11 @@ export const clearScreen = (screen: Screen): Screen => {
   return { rows, cursor: { ...cursor, visible: screen.cursor.visible } };
 };
 
+export const scrollUp = (screen: Screen, count = 1): Screen => ({
+  ...screen,
+  rows: [...screen.rows.slice(count), ...createScreen().rows].slice(0, ROWS),
+});
+
 export const moveCursor = (
   screen: Screen,
   row: number,

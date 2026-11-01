@@ -14,7 +14,7 @@ const totalDelay = 600;
 
 const start = (overrides: Partial<Parameters<typeof startBoot>[0]> = {}) => {
   const onScreen = vi.fn<(screen: Screen) => void>();
-  const onComplete = vi.fn();
+  const onComplete = vi.fn<(screen: Screen) => void>();
   const handle = startBoot({
     screen: createScreen(),
     steps,
@@ -107,6 +107,8 @@ describe("skip", () => {
     const expected = applySteps(createBootScreen(), bootSteps);
     expect(skipped.onScreen.mock.lastCall![0]).toEqual(expected);
     expect(completed.onScreen.mock.lastCall![0]).toEqual(expected);
+    expect(skipped.onComplete).toHaveBeenCalledExactlyOnceWith(expected);
+    expect(completed.onComplete).toHaveBeenCalledExactlyOnceWith(expected);
   });
 
   test("works before the first step has run", () => {
