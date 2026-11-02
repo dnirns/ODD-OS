@@ -11,11 +11,17 @@ const key = (type: Exclude<ShellKey["type"], "char">): ShellKey => ({ type });
 const type = (text: string): ShellKey[] =>
   Array.from(text, (char) => ({ type: "char", char }));
 
+const NOW = Date.UTC(2026, 10, 1, 12, 0);
+const CLOCK = { offsetMs: Date.UTC(1993, 10, 1, 15, 45, 12, 340) - NOW };
+
 const press = (state: ShellState, ...keys: readonly ShellKey[]) =>
-  keys.reduce(reduceShell, state);
+  keys.reduce((current, item) => reduceShell(current, { key: item, now: NOW }), state);
+
+const run = (state: ShellState, ...lines: readonly string[]) =>
+  lines.reduce((current, line) => press(current, ...type(line), enter), state);
 
 const shellAt = (row: number) =>
-  createShell(moveCursor(writeText(createScreen(), row, 0, PROMPT), row, PROMPT.length));
+  createShell(moveCursor(writeText(createScreen(), row, 0, PROMPT), row, PROMPT.length), CLOCK);
 
 const rowText = (screen: Screen, row: number) =>
   screen.rows[row].map((cell) => cell.char).join("").trimEnd();
@@ -40,7 +46,7 @@ const LONG = "x".repeat(COLUMNS);
 describe("createShell", () => {
   test("starts at the boot's final cursor", () => {
     const screen = applySteps(createBootScreen(), createBootSteps());
-    const shell = press(createShell(screen), ...type("d"));
+    const shell = press(createShell(screen, CLOCK), ...type("d"));
 
     expect(rowText(shell.screen, 6)).toBe("C:\\>d");
     expect(cursorAt(shell)).toEqual([6, 5]);
@@ -387,5 +393,143 @@ describe("recalling commands", () => {
 
   test("starts from the newest again after submitting", () => {
     expect(press(withHistory, up, up, ...repeat(enter, 1), up).line).toBe("two");
+  });
+});
+
+const rows = (shell: ShellState, from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, index) => rowText(shell.screen, from + index));
+
+describe("running commands", () => {
+  test("VER prints its text with DOS spacing", () => {
+    const shell = run(shellAt(0), "ver");
+
+    expect(rows(shell, 1, 5)).toEqual(["", "ODD/OS Version 3.14", "", "", PROMPT]);
+    expect(cursorAt(shell)).toEqual([5, 4]);
+  });
+
+  test("CLS leaves the prompt on the second row", () => {
+    const filled = run(shellAt(0), "foo", "bar", "baz");
+    const shell = run(filled, "cLs");
+
+    expect(rows(shell, 0, 1)).toEqual(["", PROMPT]);
+    expect(rows(shell, 2, ROWS - 1).every((row) => row === "")).toBe(true);
+    expect(cursorAt(shell)).toEqual([1, 4]);
+  });
+
+  test("CLS /? does not clear the screen", () => {
+    const shell = run(shellAt(0), "cls/?");
+
+    expect(rows(shell, 0, 3)).toEqual(["C:\\>cls/?", "Clears the screen.", "", "CLS"]);
+  });
+
+  test("HELP lists commands below the command line", () => {
+    const shell = run(shellAt(0), "help");
+
+    expect(rowText(shell.screen, 1)).toContain("type HELP command-name");
+    expect(rowText(shell.screen, 2)).toBe("CLS      Clears the screen.");
+    expect(rowText(shell.screen, 7)).toBe("VER      Displays the ODD/OS version.");
+    expect(rows(shell, 8, 9)).toEqual(["", PROMPT]);
+  });
+
+  test("MEM scrolls within the screen from the bottom row", () => {
+    const shell = run(shellAt(ROWS - 1), "mem");
+
+    expect(rowText(shell.screen, ROWS - 1)).toBe(PROMPT);
+    expect(rowText(shell.screen, ROWS - 3)).toBe("ODD/OS is resident in the high memory area.");
+    expect(cursorAt(shell)).toEqual([ROWS - 1, 4]);
+  });
+});
+
+describe("date and time prompts", () => {
+  const DATE_PROMPT = "Enter new date (mm-dd-yy): ";
+  const TIME_PROMPT = "Enter new time: ";
+
+  test("DATE asks on the next row with the cursor after the prompt", () => {
+    const shell = run(shellAt(0), "date");
+
+    expect(rows(shell, 1, 2)).toEqual(["Current date is Mon 11-01-1993", DATE_PROMPT.trimEnd()]);
+    expect(cursorAt(shell)).toEqual([2, DATE_PROMPT.length]);
+  });
+
+  test("Enter keeps the date and returns to the prompt", () => {
+    const shell = run(shellAt(0), "date", "", "date");
+
+    expect(rows(shell, 3, 5)).toEqual(["", "C:\\>date", "Current date is Mon 11-01-1993"]);
+  });
+
+  test("a date entered at the prompt changes the clock", () => {
+    const shell = run(shellAt(0), "date", "12-25-93", "date");
+
+    expect(rows(shell, 3, 5)).toEqual(["", "C:\\>date", "Current date is Sat 12-25-1993"]);
+  });
+
+  test("a date argument sets the clock with no prompt", () => {
+    const shell = run(shellAt(0), "date 12/25/1993");
+
+    expect(rows(shell, 1, 2)).toEqual(["", PROMPT]);
+  });
+
+  test("an invalid date reports and asks again", () => {
+    const shell = run(shellAt(0), "date", "foo");
+
+    expect(rows(shell, 3, 5)).toEqual(["", "Invalid date", DATE_PROMPT.trimEnd()]);
+    expect(cursorAt(shell)).toEqual([5, DATE_PROMPT.length]);
+  });
+
+  test("an invalid date argument skips the current date", () => {
+    const shell = run(shellAt(0), "date foo");
+
+    expect(rows(shell, 1, 3)).toEqual(["", "Invalid date", DATE_PROMPT.trimEnd()]);
+  });
+
+  test("the prompt only ends through a valid entry or Enter", () => {
+    const shell = run(shellAt(0), "date", "foo", "bar", "");
+
+    expect(shell.input.type).toBe("command");
+    expect(rowText(shell.screen, shell.screen.cursor.row)).toBe(PROMPT);
+  });
+
+  test("TIME rejects, then accepts a time", () => {
+    const shell = run(shellAt(0), "time", "25:00", "9:30p", "time");
+
+    expect(rowText(shell.screen, 1)).toBe("Current time is  3:45:12.34p");
+    expect(rowText(shell.screen, 2)).toBe(`${TIME_PROMPT}25:00`);
+    expect(rowText(shell.screen, 4)).toBe("Invalid time");
+    expect(rows(shell, 7, 8)).toEqual(["C:\\>time", "Current time is  9:30:00.00p"]);
+  });
+
+  test("line editing works at the prompt", () => {
+    const shell = press(run(shellAt(0), "date"), ...type("12-25-94"), backspace, ...type("3"), enter);
+
+    expect(run(shell, "date").screen.rows.flat().map((cell) => cell.char).join("")).toContain("Sat 12-25-1993");
+  });
+
+  test("Esc clears the entry but keeps the prompt", () => {
+    const shell = press(run(shellAt(0), "date"), ...type("12"), escape);
+
+    expect(rowText(shell.screen, 2)).toBe(DATE_PROMPT.trimEnd());
+    expect(cursorAt(shell)).toEqual([2, DATE_PROMPT.length]);
+    expect(shell.input.type).toBe("date");
+  });
+
+  test.each([["up", up], ["down", down], ["pageUp", key("pageUp")], ["pageDown", key("pageDown")]])(
+    "%s does nothing at the prompt",
+    (_, item) => {
+      const shell = press(run(shellAt(0), "foo", "date"), ...type("1"));
+
+      expect(press(shell, item).line).toBe("1");
+    },
+  );
+
+  test("entries stay out of the history", () => {
+    const shell = press(run(shellAt(0), "date", "12-25-93"), up);
+
+    expect(shell.line).toBe("date");
+  });
+
+  test("the clock keeps its offset across later commands", () => {
+    const before = run(shellAt(0), "date 12-25-93");
+
+    expect(run(before, "ver").clock).toEqual(before.clock);
   });
 });

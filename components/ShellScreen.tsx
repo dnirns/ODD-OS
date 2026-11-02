@@ -1,5 +1,6 @@
 import { useEffect, useReducer } from "react";
 
+import { createClock } from "../os/shell/clock";
 import { createShell, reduceShell } from "../os/shell/shell";
 import { toShellKey } from "../os/shell/shellKeys";
 import type { Screen } from "../os/terminal/screen";
@@ -9,8 +10,11 @@ type ShellScreenProps = {
   screen: Screen;
 };
 
+const startShell = (screen: Screen) =>
+  createShell(screen, createClock(Date.now()));
+
 const ShellScreen = ({ screen }: ShellScreenProps) => {
-  const [state, dispatch] = useReducer(reduceShell, screen, createShell);
+  const [state, dispatch] = useReducer(reduceShell, screen, startShell);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -24,7 +28,7 @@ const ShellScreen = ({ screen }: ShellScreenProps) => {
       if (!key) return;
 
       if (key.type !== "escape") event.preventDefault();
-      dispatch(key);
+      dispatch({ key, now: Date.now() });
     };
 
     window.addEventListener("keydown", onKeyDown);
