@@ -430,8 +430,8 @@ describe("running commands", () => {
     expect(rowText(shell.screen, 1)).toContain("type HELP command-name");
     expect(rowText(shell.screen, 2)).toBe("CD       Displays the name of or changes the current directory.");
     expect(rowText(shell.screen, 4)).toBe("CLS      Clears the screen.");
-    expect(rowText(shell.screen, 11)).toBe("VER      Displays the ODD/OS version.");
-    expect(rows(shell, 12, 13)).toEqual(["", PROMPT]);
+    expect(rowText(shell.screen, 14)).toBe("VER      Displays the ODD/OS version.");
+    expect(rows(shell, 15, 16)).toEqual(["", PROMPT]);
   });
 
   test("MEM scrolls within the screen from the bottom row", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { parseCommand, parseDriveCommand } from "./parse";
+import { parseArguments, parseCommand, parseDriveCommand } from "./parse";
 
 describe("parseCommand", () => {
   test("upper-cases the name", () => {
@@ -73,6 +73,38 @@ describe("parseCommand name terminators", () => {
   test("passes a path to a command as its parameter", () => {
     expect(parseCommand("cd..").params).toEqual([".."]);
     expect(parseCommand("cd\\dos").params).toEqual(["\\dos"]);
+  });
+});
+
+describe("parseArguments", () => {
+  test("splits parameters from switches and upper-cases switches", () => {
+    expect(parseArguments("/History foo")).toEqual({
+      tail: "/History foo",
+      params: ["foo"],
+      switches: ["/HISTORY"],
+    });
+  });
+
+  test("splits a switch that follows a parameter without a space", () => {
+    expect(parseArguments("foo/x,bar")).toMatchObject({
+      params: ["foo", "bar"],
+      switches: ["/X"],
+    });
+  });
+
+  test("trims delimiters from the tail", () => {
+    expect(parseArguments(" ,;= foo ,;=").tail).toBe("foo");
+  });
+
+  test("gives the same result as parseCommand for the rest of a line", () => {
+    const { name, ...rest } = parseCommand("doskey /history foo");
+
+    expect(name).toBe("DOSKEY");
+    expect(parseArguments(" /history foo")).toEqual(rest);
+  });
+
+  test("returns nothing for empty text", () => {
+    expect(parseArguments("")).toEqual({ tail: "", params: [], switches: [] });
   });
 });
 

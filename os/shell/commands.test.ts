@@ -57,8 +57,11 @@ describe("HELP", () => {
       "CD",
       "CHDIR",
       "CLS",
+      "COMMAND",
       "DATE",
       "DIR",
+      "DOSKEY",
+      "EXIT",
       "HELP",
       "MEM",
       "TIME",
@@ -67,7 +70,21 @@ describe("HELP", () => {
     ]);
   });
 
-  test.each(["CD", "CHDIR", "CLS", "DATE", "DIR", "HELP", "MEM", "TIME", "TYPE", "VER"])(
+  test.each([
+    "CD",
+    "CHDIR",
+    "CLS",
+    "COMMAND",
+    "DATE",
+    "DIR",
+    "DOSKEY",
+    "EXIT",
+    "HELP",
+    "MEM",
+    "TIME",
+    "TYPE",
+    "VER",
+  ])(
     "HELP %s matches its /? text",
     (name) => {
       expect(printed(`help ${name.toLowerCase()}`)).toEqual(printed(`${name} /?`));

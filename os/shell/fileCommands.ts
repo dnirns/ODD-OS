@@ -5,22 +5,15 @@ import { hasWildcard } from "../fs/names";
 import { resolvePath } from "../fs/path";
 import type { FsError } from "../fs/types";
 import { MACHINE } from "../machine";
+import { INVALID_DRIVE, INVALID_SWITCH, print, TOO_MANY_PARAMETERS } from "../programs/output";
 import type { CommandContext, CommandResult } from "./commands";
 import { listingLines } from "./dir";
 import { opaqueNoise } from "./noise";
 import type { ParsedCommand } from "./parse";
 
-export const INVALID_SWITCH = "Invalid switch";
-export const TOO_MANY_PARAMETERS = "Too many parameters";
-export const INVALID_DRIVE = "Invalid drive specification";
 
 const INVALID_DIRECTORY = "Invalid directory";
 const DRIVE_ONLY = /^[A-Za-z]:$/;
-
-export const print = (...lines: readonly string[]): CommandResult => ({
-  type: "print",
-  lines,
-});
 
 const cdMessage = (error: FsError) =>
   error === "InvalidDrive" ? INVALID_DRIVE : INVALID_DIRECTORY;

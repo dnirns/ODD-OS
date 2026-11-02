@@ -19,8 +19,8 @@ const write = (fs: Filesystem, path: string, text: string) => {
 };
 
 describe("Free space", () => {
-  test("the seeded disk has the data area less 16 clusters", () => {
-    expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 16) * CLUSTER);
+  test("the seeded disk has the data area less 22 clusters", () => {
+    expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 22) * CLUSTER);
   });
 
   test("is a multiple of the cluster size", () => {

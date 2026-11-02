@@ -1,5 +1,13 @@
 import type { Disk } from "../fs/disk";
-import { MACHINE } from "../machine";
+import {
+  INVALID_DRIVE,
+  INVALID_SWITCH,
+  print,
+} from "../programs/output";
+import { PROGRAMMES, runExecutable } from "../programs/registry";
+import { splitExecutableLine } from "../programs/resolve";
+import type { CommandInfo, LaunchResult, Registry } from "../programs/types";
+import { VERSION } from "../version";
 import { type Clock, readClock, setDate, setTime } from "./clock";
 import { formatDate, formatTime, parseDate, parseTime } from "./dateTime";
 import {
@@ -7,18 +15,15 @@ import {
   CD_SUMMARY,
   DIR_HELP,
   DIR_SUMMARY,
-  INVALID_DRIVE,
-  INVALID_SWITCH,
-  print,
   runCd,
   runDir,
   runType,
-  TOO_MANY_PARAMETERS,
   TYPE_HELP,
   TYPE_SUMMARY,
 } from "./fileCommands";
 import {
   type ParsedCommand,
+  parseArguments,
   parseCommand,
   parseDriveCommand,
   trimDelimiters,
@@ -36,12 +41,17 @@ export type CommandResult =
     }
   | { readonly type: "setClock"; readonly clock: Clock }
   | { readonly type: "setDirectory"; readonly cwd: string }
-  | { readonly type: "page"; readonly lines: readonly string[] };
+  | { readonly type: "page"; readonly lines: readonly string[] }
+  | { readonly type: "nest"; readonly lines: readonly string[] }
+  | { readonly type: "leave" }
+  | LaunchResult;
 
 export type CommandContext = {
   readonly clock: Clock;
   readonly now: number;
   readonly disk: Disk;
+  readonly history?: readonly string[];
+  readonly programmes?: Registry;
 };
 
 type Command = {
@@ -53,49 +63,10 @@ type Command = {
   ) => CommandResult;
 };
 
-const BAD_COMMAND = "Bad command or file name";
-
-const CONVENTIONAL_KB = 640;
-const RESERVED_KB = 384;
-const CONVENTIONAL_USED_KB = 57;
-const EXTENDED_USED_KB = 64;
-const LARGEST_PROGRAM_BYTES = 596_864;
-
 const withoutSwitches =
   (run: () => CommandResult) =>
   ({ switches }: ParsedCommand) =>
     switches.length > 0 ? print(INVALID_SWITCH) : run();
-
-const number = (value: number) => value.toLocaleString("en-US");
-
-const memoryRow = (label: string, ...kilobytes: readonly number[]) =>
-  label.padEnd(18) +
-  kilobytes.map((kb) => `${number(kb)}K`.padStart(7)).join("   ");
-
-const memoryReport = (): readonly string[] => {
-  const extended = MACHINE.memoryKb - CONVENTIONAL_KB - RESERVED_KB;
-  const rule = "----------------  -------   -------   -------";
-  const conventionalFree = CONVENTIONAL_KB - CONVENTIONAL_USED_KB;
-  const used = CONVENTIONAL_USED_KB + RESERVED_KB + EXTENDED_USED_KB;
-
-  return [
-    "",
-    "Memory Type        Total  =   Used  +   Free",
-    rule,
-    memoryRow("Conventional", CONVENTIONAL_KB, CONVENTIONAL_USED_KB, conventionalFree),
-    memoryRow("Upper", 0, 0, 0),
-    memoryRow("Reserved", RESERVED_KB, RESERVED_KB, 0),
-    memoryRow("Extended (XMS)", extended, EXTENDED_USED_KB, extended - EXTENDED_USED_KB),
-    rule,
-    memoryRow("Total memory", MACHINE.memoryKb, used, MACHINE.memoryKb - used),
-    "",
-    memoryRow("Total under 1 MB", CONVENTIONAL_KB, CONVENTIONAL_USED_KB, conventionalFree),
-    "",
-    `Largest executable program size ${`${conventionalFree}K`.padStart(8)} (${number(LARGEST_PROGRAM_BYTES)} bytes)`,
-    `Largest free upper memory block ${"0K".padStart(8)} ${"(0 bytes)".padStart(15)}`,
-    "ODD/OS is resident in the high memory area.",
-  ];
-};
 
 const askDate = (...lines: readonly string[]): CommandResult => ({
   type: "ask",
@@ -125,28 +96,6 @@ const applyTime = (text: string, { clock, now }: CommandContext) => {
     : askTime("", "Invalid time");
 };
 
-const showHelp = (
-  { switches, params }: ParsedCommand,
-): CommandResult => {
-  if (switches.length > 0) return print(INVALID_SWITCH);
-  if (params.length > 1) return print(TOO_MANY_PARAMETERS);
-
-  const [topic] = params;
-  if (topic === undefined) {
-    return print(
-      "For more information on a specific command, type HELP command-name",
-      ...Object.keys(COMMANDS)
-        .toSorted()
-        .map((name) => `${name.padEnd(9)}${COMMANDS[name].summary}`),
-    );
-  }
-
-  const name = topic.toUpperCase();
-  return Object.hasOwn(COMMANDS, name)
-    ? print(...COMMANDS[name].help)
-    : print("Help not available for this command");
-};
-
 const COMMANDS: Readonly<Record<string, Command>> = {
   CD: { summary: CD_SUMMARY, help: CD_HELP, run: runCd },
   CHDIR: { summary: CD_SUMMARY, help: CD_HELP, run: runCd },
@@ -173,25 +122,10 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           )
         : applyDate(tail, context),
   },
-  HELP: {
-    summary: "Provides Help information for ODD/OS commands.",
-    help: [
-      "Provides Help information for ODD/OS commands.",
-      "",
-      "HELP [command]",
-      "",
-      "  command - displays help information on that command.",
-    ],
-    run: showHelp,
-  },
-  MEM: {
-    summary: "Displays the amount of used and free memory in your system.",
-    help: ["Displays the amount of used and free memory in your system.", "", "MEM"],
-    run: ({ switches, params }) => {
-      if (switches.length > 0) return print(INVALID_SWITCH);
-      if (params.length > 0) return print(TOO_MANY_PARAMETERS);
-      return print(...memoryReport());
-    },
+  EXIT: {
+    summary: "Quits the command interpreter.",
+    help: ["Quits the command interpreter.", "", "EXIT"],
+    run: withoutSwitches((): CommandResult => ({ type: "leave" })),
   },
   TIME: {
     summary: "Displays or sets the system time.",
@@ -214,9 +148,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   VER: {
     summary: "Displays the ODD/OS version.",
     help: ["Displays the ODD/OS version.", "", "VER"],
-    run: withoutSwitches(() => print("", "ODD/OS Version 3.14", "")),
+    run: withoutSwitches(() => print("", VERSION, "")),
   },
 };
+
+const PROGRAMME_NAME = /([^\\/:]+?)(?:\.[^.\\/:]*)?$/;
+
+const programmeInfo = (path: string, summary: string, help: readonly string[]): CommandInfo => ({
+  name: (PROGRAMME_NAME.exec(path)?.[1] ?? path).toUpperCase(),
+  summary,
+  help,
+});
+
+const commandList = (registry: Registry): readonly CommandInfo[] => [
+  ...Object.entries(COMMANDS).map(([name, { summary, help }]) => ({ name, summary, help })),
+  ...Object.entries(registry).flatMap(([path, programme]) =>
+    programme.kind === "command"
+      ? [programmeInfo(path, programme.summary, programme.help)]
+      : [],
+  ),
+];
 
 export const runCommand = (
   line: string,
@@ -231,12 +182,22 @@ export const runCommand = (
 
   const parsed = parseCommand(line);
 
-  if (!Object.hasOwn(COMMANDS, parsed.name)) return print(BAD_COMMAND);
+  if (Object.hasOwn(COMMANDS, parsed.name)) {
+    const command = COMMANDS[parsed.name];
+    return parsed.switches.includes("/?")
+      ? print(...command.help)
+      : command.run(parsed, context);
+  }
 
-  const command = COMMANDS[parsed.name];
-  return parsed.switches.includes("/?")
-    ? print(...command.help)
-    : command.run(parsed, context);
+  const { token, rest } = splitExecutableLine(line);
+  const { disk, clock, now, history = [], programmes = PROGRAMMES } = context;
+
+  return runExecutable(
+    token,
+    parseArguments(rest),
+    { disk, clock, now, history, commands: commandList(programmes) },
+    programmes,
+  );
 };
 
 export const answerPrompt = (

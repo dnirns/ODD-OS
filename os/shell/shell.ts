@@ -8,6 +8,9 @@ import {
   writeText,
 } from "../terminal/screen";
 import { createDisk, type Disk } from "../fs/disk";
+import { PROGRAMMES } from "../programs/registry";
+import { stepProgramme } from "../programs/step";
+import type { Exited, ProgrammeEvent, Registry, Running } from "../programs/types";
 import type { Clock } from "./clock";
 import {
   answerPrompt,
@@ -48,6 +51,11 @@ type InputMode =
   | { readonly type: PromptInput }
   | { readonly type: "pause"; readonly remaining: readonly string[] };
 
+export type ActiveProgramme = {
+  readonly programme: Running;
+  readonly saved: Screen;
+};
+
 export type ShellState = {
   readonly screen: Screen;
   readonly lineStart: Position;
@@ -58,6 +66,9 @@ export type ShellState = {
   readonly input: InputMode;
   readonly clock: Clock;
   readonly disk: Disk;
+  readonly programmes: Registry;
+  readonly depth: number;
+  readonly running: ActiveProgramme | undefined;
 };
 
 export type ShellAction = {
@@ -231,14 +242,58 @@ const applyResult = (
       );
     case "page":
       return showPage(state, screen, result.lines);
+    case "nest":
+      return {
+        ...toCommandPrompt(state, nextRow(printLines(screen, result.lines))),
+        depth: state.depth + 1,
+      };
+    case "leave":
+      return toCommandPrompt(
+        { ...state, depth: Math.max(state.depth - 1, 0) },
+        nextRow(screen),
+      );
+    case "launch":
+      return {
+        ...state,
+        screen: result.running.screen,
+        running: { programme: result.running, saved: screen },
+      };
   }
 };
+
+const leaveProgramme = (
+  state: ShellState,
+  { saved }: ActiveProgramme,
+  { disk }: Exited,
+): ShellState =>
+  toCommandPrompt(
+    { ...state, running: undefined, disk: disk ?? state.disk },
+    nextRow(saved),
+  );
+
+const stepRunning = (state: ShellState, event: ProgrammeEvent): ShellState => {
+  const { running } = state;
+  if (running === undefined) return state;
+
+  const next = stepProgramme(running.programme, event);
+
+  return next.type === "running"
+    ? { ...state, screen: next.screen, running: { ...running, programme: next } }
+    : leaveProgramme(state, running, next);
+};
+
+export const tickShell = (state: ShellState, now: number): ShellState =>
+  stepRunning(state, { type: "tick", now });
+
+export const tickInterval = ({ running }: ShellState): number | undefined =>
+  running?.programme.tickMs;
 
 const submit = (state: ShellState, now: number): ShellState => {
   const { screen, lineStart, line, history, input, clock, disk } = state;
   const end = cellAt(lineStart, line.length);
   const afterLine = nextRow(moveCursor(screen, end.row, end.column));
-  const context = { clock, now, disk };
+  const entries = addEntry(history, line);
+  const context = { clock, now, disk, history: entries.entries, programmes: state.programmes };
 
   if (input.type === "pause") return state;
   if (input.type !== "command") {
@@ -247,7 +302,7 @@ const submit = (state: ShellState, now: number): ShellState => {
   if (line.trim() === "") return toCommandPrompt(state, afterLine);
 
   return applyResult(
-    { ...state, history: addEntry(history, line) },
+    { ...state, history: entries },
     afterLine,
     runCommand(line, context),
   );
@@ -257,6 +312,7 @@ export const createShell = (
   screen: Screen,
   clock: Clock,
   disk: Disk = createDisk(),
+  programmes: Registry = PROGRAMMES,
 ): ShellState => ({
   screen,
   lineStart: { row: screen.cursor.row, column: screen.cursor.column },
@@ -267,6 +323,9 @@ export const createShell = (
   input: { type: "command" },
   clock,
   disk,
+  programmes,
+  depth: 0,
+  running: undefined,
 });
 
 export const reduceShell = (
@@ -275,6 +334,7 @@ export const reduceShell = (
 ): ShellState => {
   const { line, cursor, history } = state;
 
+  if (state.running) return stepRunning(state, { type: "key", key, now });
   if (state.input.type === "pause") return continuePaging(state);
 
   switch (key.type) {

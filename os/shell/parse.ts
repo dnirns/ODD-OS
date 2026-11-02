@@ -1,8 +1,11 @@
-export type ParsedCommand = {
-  readonly name: string;
+export type Arguments = {
   readonly tail: string;
   readonly params: readonly string[];
   readonly switches: readonly string[];
+};
+
+export type ParsedCommand = Arguments & {
+  readonly name: string;
 };
 
 const LEADING_DELIMITERS = /^[ \t,;=]+/;
@@ -15,22 +18,29 @@ const DELIMITERS = /[ \t,;=]+/;
 export const trimDelimiters = (text: string) =>
   text.replace(LEADING_DELIMITERS, "").replace(/[ \t,;=]+$/, "");
 
-export const parseCommand = (line: string): ParsedCommand => {
-  const trimmed = line.replace(LEADING_DELIMITERS, "");
-  const [name] = COMMAND_NAME.exec(trimmed) ?? [""];
-  const tail = trimDelimiters(trimmed.slice(name.length));
+export const parseArguments = (text: string): Arguments => {
+  const tail = trimDelimiters(text);
   const parts = tail
     .split(DELIMITERS)
     .flatMap((token) => token.split(/(?=\/)/))
     .filter((part) => part !== "");
 
   return {
-    name: name.toUpperCase(),
     tail,
     params: parts.filter((part) => !part.startsWith("/")),
     switches: parts
       .filter((part) => part.startsWith("/"))
       .map((part) => part.toUpperCase()),
+  };
+};
+
+export const parseCommand = (line: string): ParsedCommand => {
+  const trimmed = line.replace(LEADING_DELIMITERS, "");
+  const [name] = COMMAND_NAME.exec(trimmed) ?? [""];
+
+  return {
+    name: name.toUpperCase(),
+    ...parseArguments(trimmed.slice(name.length)),
   };
 };
 

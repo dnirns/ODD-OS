@@ -41,22 +41,35 @@ describe("Contents of drive C", () => {
       "ODDWARE",
       "README.TXT",
     ]);
-    expect(names("C:\\DOS")).toEqual(["HIMEM.SYS"]);
+    expect(names("C:\\DOS")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM"]);
     expect(names("C:\\ODDWARE")).toEqual([]);
-    expect(all).toHaveLength(7);
+    expect(all).toHaveLength(10);
   });
 
   test("ODDWARE starts empty", () => {
     expect(names("C:\\ODDWARE")).toEqual([]);
   });
 
-  test("COMMAND.COM and HIMEM.SYS are opaque, the others text", () => {
-    expect(content("C:\\COMMAND.COM")).toMatchObject({ kind: "opaque" });
-    expect(content("C:\\DOS\\HIMEM.SYS")).toMatchObject({ kind: "opaque" });
+  test("the system and programme files are opaque, the others text", () => {
+    [
+      "C:\\COMMAND.COM",
+      "C:\\DOS\\HIMEM.SYS",
+      "C:\\DOS\\MEM.EXE",
+      "C:\\DOS\\DOSKEY.COM",
+      "C:\\DOS\\HELP.COM",
+    ].forEach((path) => {
+      expect(content(path)).toMatchObject({ kind: "opaque" });
+    });
 
     ["C:\\CONFIG.SYS", "C:\\AUTOEXEC.BAT", "C:\\README.TXT"].forEach((path) => {
       expect(content(path)).toMatchObject({ kind: "text" });
     });
+  });
+
+  test("Programme files are opaque with a declared size", () => {
+    expect(content("C:\\DOS\\MEM.EXE")).toEqual({ kind: "opaque", size: 32_502 });
+    expect(content("C:\\DOS\\DOSKEY.COM")).toEqual({ kind: "opaque", size: 5_861 });
+    expect(content("C:\\DOS\\HELP.COM")).toEqual({ kind: "opaque", size: 5_527 });
   });
 
   test("files have a size and the archive attribute only", () => {
@@ -107,6 +120,9 @@ describe("Seeded timestamps", () => {
     ["C:\\COMMAND.COM", "1993-03-10T06:00:00.000Z"],
     ["C:\\DOS", "1993-09-14T09:12:00.000Z"],
     ["C:\\DOS\\HIMEM.SYS", "1993-03-10T06:00:00.000Z"],
+    ["C:\\DOS\\MEM.EXE", "1993-03-10T06:00:00.000Z"],
+    ["C:\\DOS\\DOSKEY.COM", "1993-03-10T06:00:00.000Z"],
+    ["C:\\DOS\\HELP.COM", "1993-03-10T06:00:00.000Z"],
     ["C:\\CONFIG.SYS", "1993-09-14T09:31:00.000Z"],
     ["C:\\AUTOEXEC.BAT", "1993-09-14T09:31:00.000Z"],
     ["C:\\ODDWARE", "1993-09-20T16:48:00.000Z"],
