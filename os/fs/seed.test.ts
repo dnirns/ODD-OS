@@ -42,12 +42,12 @@ describe("Contents of drive C", () => {
       "README.TXT",
     ]);
     expect(names("C:\\DOS")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM"]);
-    expect(names("C:\\ODDWARE")).toEqual([]);
-    expect(all).toHaveLength(10);
+    expect(names("C:\\ODDWARE")).toEqual(["WORM.EXE"]);
+    expect(all).toHaveLength(11);
   });
 
-  test("ODDWARE starts empty", () => {
-    expect(names("C:\\ODDWARE")).toEqual([]);
+  test("ODDWARE holds only the game", () => {
+    expect(names("C:\\ODDWARE")).toEqual(["WORM.EXE"]);
   });
 
   test("the system and programme files are opaque, the others text", () => {
@@ -57,6 +57,7 @@ describe("Contents of drive C", () => {
       "C:\\DOS\\MEM.EXE",
       "C:\\DOS\\DOSKEY.COM",
       "C:\\DOS\\HELP.COM",
+      "C:\\ODDWARE\\WORM.EXE",
     ].forEach((path) => {
       expect(content(path)).toMatchObject({ kind: "opaque" });
     });
@@ -70,6 +71,7 @@ describe("Contents of drive C", () => {
     expect(content("C:\\DOS\\MEM.EXE")).toEqual({ kind: "opaque", size: 32_502 });
     expect(content("C:\\DOS\\DOSKEY.COM")).toEqual({ kind: "opaque", size: 5_861 });
     expect(content("C:\\DOS\\HELP.COM")).toEqual({ kind: "opaque", size: 5_527 });
+    expect(content("C:\\ODDWARE\\WORM.EXE")).toEqual({ kind: "opaque", size: 23_744 });
   });
 
   test("files have a size and the archive attribute only", () => {
@@ -126,6 +128,7 @@ describe("Seeded timestamps", () => {
     ["C:\\CONFIG.SYS", "1993-09-14T09:31:00.000Z"],
     ["C:\\AUTOEXEC.BAT", "1993-09-14T09:31:00.000Z"],
     ["C:\\ODDWARE", "1993-09-20T16:48:00.000Z"],
+    ["C:\\ODDWARE\\WORM.EXE", "1993-09-20T16:49:00.000Z"],
     ["C:\\README.TXT", "1993-09-20T16:52:00.000Z"],
   ])("%s is modified at %s", (path, expected) => {
     const resolved = resolvePath(fs, "C:\\", path);

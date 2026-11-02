@@ -13,6 +13,7 @@ const DOS_RELEASED = at(1993, 3, 10, 6, 0);
 const DOS_INSTALLED = at(1993, 9, 14, 9, 12);
 const SYSTEM_CONFIGURED = at(1993, 9, 14, 9, 31);
 const ODDWARE_ADDED = at(1993, 9, 20, 16, 48);
+const WORM_COPIED = at(1993, 9, 20, 16, 49);
 const README_WRITTEN = at(1993, 9, 20, 16, 52);
 
 const COMMAND_COM_SIZE = 53_214;
@@ -20,6 +21,7 @@ const HIMEM_SYS_SIZE = 29_104;
 const MEM_EXE_SIZE = 32_502;
 const DOSKEY_COM_SIZE = 5_861;
 const HELP_COM_SIZE = 5_527;
+const WORM_EXE_SIZE = 23_744;
 
 export const AUTOEXEC_BAT = lines(...AUTOEXEC_COMMANDS);
 
@@ -52,7 +54,7 @@ export const createFilesystem = (): Filesystem => ({
     ]),
     textFile("CONFIG.SYS", SYSTEM_CONFIGURED, CONFIG_SYS),
     textFile("AUTOEXEC.BAT", SYSTEM_CONFIGURED, AUTOEXEC_BAT),
-    directory("ODDWARE", ODDWARE_ADDED),
+    directory("ODDWARE", ODDWARE_ADDED, [opaqueFile("WORM.EXE", WORM_COPIED, WORM_EXE_SIZE)]),
     textFile("README.TXT", README_WRITTEN, README_TXT),
   ]),
 });

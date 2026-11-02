@@ -12,6 +12,7 @@ import type {
   ProgrammeOutput,
   Registry,
 } from "./types";
+import { WORM } from "./worm";
 
 export const NO_BEHAVIOUR = "Program too big to fit in memory";
 
@@ -20,6 +21,7 @@ export const PROGRAMMES: Registry = {
   "C:\\DOS\\DOSKEY.COM": DOSKEY,
   "C:\\DOS\\HELP.COM": HELP,
   "C:\\DOS\\MEM.EXE": MEM,
+  "C:\\ODDWARE\\WORM.EXE": WORM,
 };
 
 const launch = (

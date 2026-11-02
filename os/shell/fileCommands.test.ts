@@ -213,7 +213,7 @@ describe("Directory listing layout", () => {
     const [files, free] = printed("dir").slice(-2);
 
     expect(files).toMatch(/^ +4 file\(s\) +[\d,]+ bytes$/);
-    expect(free).toMatch(/^ +356,139,008 bytes free$/);
+    expect(free).toMatch(/^ +356,114,432 bytes free$/);
   });
 });
 
@@ -228,10 +228,18 @@ describe("Dot entries", () => {
   });
 
   test("an empty directory lists only the dot entries", () => {
-    const rows = dirRows("dir oddware");
+    const rows = printedWith("dir empty", { root: directory("", WHEN, [directory("EMPTY", WHEN)]) }).slice(4);
 
     expect(rows.slice(0, 2).map((row) => row.slice(0, 2).trim())).toEqual([".", ".."]);
     expect(rows.at(-2)).toBe("        0 file(s)              0 bytes");
+  });
+});
+
+describe("The seeded ODDWARE directory", () => {
+  test("lists the game", () => {
+    expect(dirNames("dir oddware")).toEqual([".", "..", "WORM.EXE"]);
+    expect(dirRows("dir oddware")[2]).toBe("WORM     EXE        23,744 09-20-93   4:49p");
+    expect(dirRows("dir oddware").at(-2)).toBe("        1 file(s)         23,744 bytes");
   });
 });
 
