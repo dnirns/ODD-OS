@@ -7,6 +7,7 @@ import {
   scrollUp,
   writeText,
 } from "../terminal/screen";
+import { createDisk, type Disk } from "../fs/disk";
 import type { Clock } from "./clock";
 import {
   answerPrompt,
@@ -23,7 +24,8 @@ import {
   recallOldest,
   recallPrevious,
 } from "./history";
-import { PROMPT } from "./prompt";
+import { formatPrompt } from "./prompt";
+import { layoutRows } from "./text";
 import type { ShellKey } from "./shellKeys";
 
 const MAX_LINE_LENGTH = 127;
@@ -38,7 +40,13 @@ type Position = {
   readonly column: number;
 };
 
-type InputMode = { readonly type: "command" } | { readonly type: PromptInput };
+const PAUSE_MESSAGE = "Press any key to continue . . .";
+const PAGE_ROWS = ROWS - 2;
+
+type InputMode =
+  | { readonly type: "command" }
+  | { readonly type: PromptInput }
+  | { readonly type: "pause"; readonly remaining: readonly string[] };
 
 export type ShellState = {
   readonly screen: Screen;
@@ -49,6 +57,7 @@ export type ShellState = {
   readonly history: History;
   readonly input: InputMode;
   readonly clock: Clock;
+  readonly disk: Disk;
 };
 
 export type ShellAction = {
@@ -142,8 +151,11 @@ const nextRow = (screen: Screen): Screen => {
     : moveCursor(screen, row + 1, 0);
 };
 
-const printLine = (screen: Screen, text: string): Screen =>
+const printRow = (screen: Screen, text: string): Screen =>
   nextRow(writeText(screen, screen.cursor.row, 0, text));
+
+const printLine = (screen: Screen, text: string): Screen =>
+  layoutRows(text).reduce(printRow, screen);
 
 const printLines = (screen: Screen, lines: readonly string[]): Screen =>
   lines.reduce(printLine, screen);
@@ -163,9 +175,34 @@ const startLine = (state: ShellState, screen: Screen): ShellState => ({
 });
 
 const toCommandPrompt = (state: ShellState, screen: Screen): ShellState => ({
-  ...startLine(state, showPrompt(screen, PROMPT)),
+  ...startLine(state, showPrompt(screen, formatPrompt(state.disk.cwd))),
   input: { type: "command" },
 });
+
+const showPage = (
+  state: ShellState,
+  screen: Screen,
+  lines: readonly string[],
+): ShellState => {
+  if (lines.length <= PAGE_ROWS) {
+    return toCommandPrompt(state, nextRow(printLines(screen, lines)));
+  }
+
+  const paused = showPrompt(
+    printLines(screen, lines.slice(0, PAGE_ROWS)),
+    PAUSE_MESSAGE,
+  );
+
+  return {
+    ...startLine(state, paused),
+    input: { type: "pause", remaining: lines.slice(PAGE_ROWS) },
+  };
+};
+
+const continuePaging = (state: ShellState): ShellState =>
+  state.input.type === "pause"
+    ? showPage(state, nextRow(state.screen), state.input.remaining)
+    : state;
 
 const applyResult = (
   state: ShellState,
@@ -187,15 +224,23 @@ const applyResult = (
       };
     case "setClock":
       return toCommandPrompt({ ...state, clock: result.clock }, nextRow(screen));
+    case "setDirectory":
+      return toCommandPrompt(
+        { ...state, disk: { ...state.disk, cwd: result.cwd } },
+        screen,
+      );
+    case "page":
+      return showPage(state, screen, result.lines);
   }
 };
 
 const submit = (state: ShellState, now: number): ShellState => {
-  const { screen, lineStart, line, history, input, clock } = state;
+  const { screen, lineStart, line, history, input, clock, disk } = state;
   const end = cellAt(lineStart, line.length);
   const afterLine = nextRow(moveCursor(screen, end.row, end.column));
-  const context = { clock, now };
+  const context = { clock, now, disk };
 
+  if (input.type === "pause") return state;
   if (input.type !== "command") {
     return applyResult(state, afterLine, answerPrompt(input.type, line, context));
   }
@@ -208,7 +253,11 @@ const submit = (state: ShellState, now: number): ShellState => {
   );
 };
 
-export const createShell = (screen: Screen, clock: Clock): ShellState => ({
+export const createShell = (
+  screen: Screen,
+  clock: Clock,
+  disk: Disk = createDisk(),
+): ShellState => ({
   screen,
   lineStart: { row: screen.cursor.row, column: screen.cursor.column },
   line: "",
@@ -217,6 +266,7 @@ export const createShell = (screen: Screen, clock: Clock): ShellState => ({
   history: createHistory(),
   input: { type: "command" },
   clock,
+  disk,
 });
 
 export const reduceShell = (
@@ -224,6 +274,8 @@ export const reduceShell = (
   { key, now }: ShellAction,
 ): ShellState => {
   const { line, cursor, history } = state;
+
+  if (state.input.type === "pause") return continuePaging(state);
 
   switch (key.type) {
     case "char":

@@ -1,8 +1,10 @@
-import { ARCHIVE, fileSize } from "./entries";
-import { locate } from "./path";
+import { ARCHIVE, fileSize, NO_ATTRIBUTES } from "./entries";
+import { hasWildcard, matchesPattern, parsePattern } from "./names";
+import { locate, resolvePath } from "./path";
 import {
   type Attributes,
   type DirectoryEntry,
+  type Entry,
   fail,
   type FileContent,
   type FileEntry,
@@ -17,6 +19,109 @@ export type Listing = {
   readonly modified: Date;
   readonly attributes: Attributes;
   readonly size: number;
+};
+
+export type Found = {
+  readonly path: string;
+  readonly isRoot: boolean;
+  readonly modified: Date;
+  readonly entries: readonly Listing[];
+};
+
+const toListing = (entry: Entry): Listing => ({
+  name: entry.name,
+  kind: entry.kind,
+  modified: entry.modified,
+  attributes: entry.attributes,
+  size: entry.kind === "file" ? fileSize(entry) : 0,
+});
+
+const LAST_SEPARATOR = /[\\/][^\\/]*$/;
+const DRIVE_PREFIX = /^[A-Za-z]:/;
+
+const splitSpec = (spec: string) => {
+  const separator = LAST_SEPARATOR.exec(spec);
+  if (separator) {
+    const cut = separator.index + 1;
+    return { directory: spec.slice(0, cut), last: spec.slice(cut) };
+  }
+
+  const drive = DRIVE_PREFIX.exec(spec);
+  const length = drive ? drive[0].length : 0;
+  return { directory: spec.slice(0, length), last: spec.slice(length) };
+};
+
+const dotEntry = (name: string, modified: Date): Listing => ({
+  name,
+  kind: "directory",
+  modified,
+  attributes: NO_ATTRIBUTES,
+  size: 0,
+});
+
+// FAT stores `.` and `..` in every directory but the root. Neither is stored
+// here, so both take the directory's own time.
+const directoryFound = (path: string, entry: DirectoryEntry): Found => {
+  const isRoot = path === "C:\\";
+
+  return {
+    path,
+    isRoot,
+    modified: entry.modified,
+    entries: [
+      ...(isRoot ? [] : [dotEntry(".", entry.modified), dotEntry("..", entry.modified)]),
+      ...entry.entries.map(toListing),
+    ],
+  };
+};
+
+// Finds the entries a directory listing names: a directory's contents, one
+// file, or the entries of a directory that match a wildcard pattern. Hidden
+// entries are included, and so are `.` and `..` outside the root when they
+// belong to the result.
+export const findEntries = (
+  fs: Filesystem,
+  cwd: string,
+  spec: string,
+): Result<Found> => {
+  const { directory, last } = splitSpec(spec);
+  const parent = resolvePath(fs, cwd, directory === "" ? "." : directory);
+
+  if (!parent.ok) {
+    return fail(
+      parent.error === "InvalidName" || parent.error === "NotADirectory"
+        ? "PathNotFound"
+        : parent.error,
+    );
+  }
+  if (parent.value.entry.kind !== "directory") return fail("PathNotFound");
+
+  const { path, entry: folder } = parent.value;
+
+  if (last === "") return ok(directoryFound(path, folder));
+
+  if (hasWildcard(last)) {
+    const pattern = parsePattern(last);
+    if (!pattern.ok) return fail(pattern.error);
+
+    const found = directoryFound(path, folder);
+    return ok({
+      ...found,
+      entries: found.entries.filter(({ name }) => matchesPattern(pattern.value, name)),
+    });
+  }
+
+  const target = resolvePath(fs, cwd, spec);
+  if (!target.ok) {
+    return target.error === "FileNotFound"
+      ? ok({ ...directoryFound(path, folder), entries: [] })
+      : fail(target.error);
+  }
+
+  const { entry } = target.value;
+  return entry.kind === "directory"
+    ? ok(directoryFound(target.value.path, entry))
+    : ok({ ...directoryFound(path, folder), entries: [toListing(entry)] });
 };
 
 export const readFile = (

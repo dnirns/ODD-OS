@@ -1,11 +1,16 @@
 import { describe, expect, test } from "vitest";
 
+import { createDisk } from "../fs/disk";
 import { COLUMNS } from "../terminal/screen";
 import { createClock, readClock } from "./clock";
 import { answerPrompt, type CommandContext, type CommandResult, runCommand } from "./commands";
 
 const now = Date.UTC(2026, 10, 1, 12, 0);
-const context: CommandContext = { clock: { offsetMs: Date.UTC(1993, 10, 1, 15, 45, 12, 340) - now }, now };
+const context: CommandContext = {
+  clock: { offsetMs: Date.UTC(1993, 10, 1, 15, 45, 12, 340) - now },
+  now,
+  disk: createDisk(),
+};
 
 const printed = (line: string) => {
   const result = runCommand(line, context);
@@ -19,7 +24,7 @@ const clockAfter = (result: CommandResult) => {
 };
 
 describe("unknown commands", () => {
-  test.each(["foo /x", "DIR", "constructor", "__proto__", "/x", ",;"])("rejects %j", (line) => {
+  test.each(["foo /x", "copy a b", "worm.exe", "constructor", "__proto__", "/x", ",;", "c:ver"])("rejects %j", (line) => {
     expect(printed(line)).toEqual(["Bad command or file name"]);
   });
 });
@@ -48,10 +53,21 @@ describe("HELP", () => {
     const [heading, ...rows] = printed("help");
 
     expect(heading).toBe("For more information on a specific command, type HELP command-name");
-    expect(rows.map((row) => row.split(" ")[0])).toEqual(["CLS", "DATE", "HELP", "MEM", "TIME", "VER"]);
+    expect(rows.map((row) => row.split(" ")[0])).toEqual([
+      "CD",
+      "CHDIR",
+      "CLS",
+      "DATE",
+      "DIR",
+      "HELP",
+      "MEM",
+      "TIME",
+      "TYPE",
+      "VER",
+    ]);
   });
 
-  test.each(["CLS", "DATE", "HELP", "MEM", "TIME", "VER"])(
+  test.each(["CD", "CHDIR", "CLS", "DATE", "DIR", "HELP", "MEM", "TIME", "TYPE", "VER"])(
     "HELP %s matches its /? text",
     (name) => {
       expect(printed(`help ${name.toLowerCase()}`)).toEqual(printed(`${name} /?`));
@@ -66,9 +82,85 @@ describe("HELP", () => {
   });
 
   test("no line exceeds the screen width", () => {
-    const lines = ["help", "cls /?", "date /?", "help /?", "mem /?", "time /?", "ver /?", "mem"].flatMap(printed);
+    const lines = [
+      "help",
+      "cd /?",
+      "chdir /?",
+      "cls /?",
+      "date /?",
+      "dir /?",
+      "help /?",
+      "mem /?",
+      "time /?",
+      "type /?",
+      "ver /?",
+      "mem",
+    ].flatMap(printed);
 
     expect(lines.every((line) => line.length <= COLUMNS)).toBe(true);
+  });
+});
+
+describe("Help for the filesystem commands", () => {
+  test("DIR help names the switches that work and no others", () => {
+    const text = printed("dir /?").join("\n");
+
+    expect(text).toContain("/W");
+    expect(text).toContain("/P");
+    expect(text).not.toMatch(/\/[ABCLOS]\b/);
+    expect(printed("help dir")).toEqual(printed("dir /?"));
+  });
+
+  test("shows help instead of listing", () => {
+    expect(printed("dir /?").join("\n")).not.toContain("Volume in drive");
+    expect(printed("dir /w /?")).toEqual(printed("dir /?"));
+  });
+
+  test("CD and CHDIR share a text and do not change directory", () => {
+    const withDisk = { ...context, disk: { ...context.disk, cwd: "C:\\DOS" } };
+    const result = runCommand("cd /?", withDisk);
+
+    expect(result.type).toBe("print");
+    expect(printed("chdir /?")).toEqual(printed("cd /?"));
+    expect(printed("cd /?").join("\n")).toContain("CHDIR");
+  });
+
+  test("TYPE help gives its syntax and does not display the file", () => {
+    expect(printed("type readme.txt /?")).toEqual(printed("type /?"));
+    expect(printed("type /?").join("\n")).toContain("TYPE [drive:][path]filename");
+  });
+
+  test("help topics work in any case", () => {
+    expect(printed("help CHDIR")).toEqual(printed("cd /?"));
+    expect(printed("HELP Type")).toEqual(printed("type /?"));
+  });
+});
+
+describe("Recognising a command", () => {
+  test("runs a command ending at a dot", () => {
+    expect(printed("ver.com")).toEqual(printed("ver"));
+  });
+
+  test("runs a command ending at other delimiters", () => {
+    expect(printed("ver;")).toEqual(printed("ver"));
+    expect(printed("ver,")).toEqual(printed("ver"));
+    expect(printed("ver=")).toEqual(printed("ver"));
+  });
+
+  test("passes a path with no space to CD", () => {
+    expect(runCommand("cd\\dos", context)).toEqual({ type: "setDirectory", cwd: "C:\\DOS" });
+  });
+
+  test("a drive before a name is not a command", () => {
+    expect(printed("c:ver")).toEqual(["Bad command or file name"]);
+  });
+});
+
+describe("Clearing the screen in a subdirectory", () => {
+  test("CLS still just clears", () => {
+    expect(runCommand("cls", { ...context, disk: { ...context.disk, cwd: "C:\\DOS" } })).toEqual({
+      type: "clear",
+    });
   });
 });
 
@@ -193,5 +285,5 @@ describe("answerPrompt", () => {
 test("createClock output works with commands", () => {
   const clock = createClock(now);
 
-  expect(runCommand("date", { clock, now }).type).toBe("ask");
+  expect(runCommand("date", { clock, now, disk: createDisk() }).type).toBe("ask");
 });

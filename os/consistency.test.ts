@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vitest";
 
 import { applySteps, createBootScreen, createBootSteps } from "./boot/bootSteps";
-import { readFile } from "./fs/operations";
+import { createDisk } from "./fs/disk";
+import { freeBytes } from "./fs/freeSpace";
+import { readFile, writeFile } from "./fs/operations";
 import { resolvePath } from "./fs/path";
 import { createFilesystem } from "./fs/seed";
+import { MACHINE } from "./machine";
 import { runCommand } from "./shell/commands";
 import type { Screen } from "./terminal/screen";
 
@@ -27,7 +30,7 @@ const echoedCommands = (screen: Screen) =>
     .map((text) => text.slice("C>".length));
 
 const memLines = () => {
-  const result = runCommand("mem", { clock: { offsetMs: 0 }, now: 0 });
+  const result = runCommand("mem", { clock: { offsetMs: 0 }, now: 0, disk: createDisk() });
   if (result.type !== "print") throw new Error("MEM did not print");
   return result.lines;
 };
@@ -164,5 +167,36 @@ describe("CONFIG.SYS matches MEM", () => {
       expect(problems(config, altered)).not.toEqual([]);
       expect(problems(config.replace("DOS=HIGH\r\n", ""), altered)).toEqual([]);
     });
+  });
+});
+
+describe("Free space matches the disk", () => {
+  const CLUSTER_BYTES = 8192;
+  const NOW = new Date(Date.UTC(1993, 10, 2, 14, 30));
+
+  const spaceAfterWriting = (size: number, capacityMb: number = MACHINE.fixedDiskMb) => {
+    const result = writeFile(fs, "C:\\", "NEW.TXT", "x".repeat(size), NOW);
+    if (!result.ok) throw new Error(result.error);
+    return freeBytes(result.value, capacityMb);
+  };
+
+  test.each([1, 100, 8191, 8192, 8193, 20_000, 100_000])(
+    "writing %i bytes reduces free space by its size in whole clusters",
+    (size) => {
+      const rounded = Math.ceil(size / CLUSTER_BYTES) * CLUSTER_BYTES;
+
+      expect(freeBytes(fs, MACHINE.fixedDiskMb) - spaceAfterWriting(size)).toBe(rounded);
+    },
+  );
+
+  test("a different cluster size would be detected", () => {
+    const before = freeBytes(fs, 100);
+
+    expect(before - spaceAfterWriting(1, 100)).not.toBe(CLUSTER_BYTES);
+  });
+
+  test("the machine's disk is the size the cluster size is chosen for", () => {
+    expect(MACHINE.fixedDiskMb).toBeGreaterThanOrEqual(257);
+    expect(MACHINE.fixedDiskMb).toBeLessThanOrEqual(511);
   });
 });

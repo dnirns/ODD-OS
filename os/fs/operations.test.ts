@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import { ARCHIVE, directory, opaqueFile, textFile } from "./entries";
-import { listDirectory, readFile, writeFile } from "./operations";
+import { ARCHIVE, directory, NO_ATTRIBUTES, opaqueFile, textFile } from "./entries";
+import { findEntries, listDirectory, readFile, writeFile } from "./operations";
 import { createTestFilesystem } from "./testTree";
 import type { FileContent, Filesystem, FsError } from "./types";
 
@@ -379,4 +379,104 @@ test("read content is the declared shape", () => {
   const content: FileContent | FsError = read("C:\\COMMAND.COM");
 
   expect(content).toEqual({ kind: "opaque", size: 100 });
+});
+
+describe("findEntries", () => {
+  const WHEN = new Date(Date.UTC(1993, 8, 14, 9, 12));
+  const tree: Filesystem = {
+    root: directory("", WHEN, [
+      textFile("A.TXT", WHEN, "a"),
+      textFile("HIDDEN.TXT", WHEN, "h", { ...ARCHIVE, hidden: true }),
+      textFile("SYS.DAT", WHEN, "s", { ...NO_ATTRIBUTES, system: true }),
+      directory("SUB", new Date(Date.UTC(1993, 9, 1, 8, 5)), [textFile("B.TXT", WHEN, "bb")]),
+    ]),
+  };
+
+  const find = (spec: string, cwd = "C:\\") => {
+    const result = findEntries(tree, cwd, spec);
+    return result.ok
+      ? { path: result.value.path, names: result.value.entries.map(({ name }) => name) }
+      : result.error;
+  };
+
+  test("lists a directory for an empty spec", () => {
+    expect(find("")).toEqual({
+      path: "C:\\",
+      names: ["A.TXT", "HIDDEN.TXT", "SYS.DAT", "SUB"],
+    });
+  });
+
+  test("starts a subdirectory with its dot entries, dated as the directory", () => {
+    const result = findEntries(tree, "C:\\", "sub");
+    const dates = result.ok ? result.value.entries.map(({ modified }) => modified) : [];
+
+    expect(find("sub")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(dates[0]).toEqual(new Date(Date.UTC(1993, 9, 1, 8, 5)));
+    expect(dates[1]).toEqual(dates[0]);
+  });
+
+  test("includes the dot entries only when they match the pattern", () => {
+    expect(find("*", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(find("*.*", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(find("*.txt", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: ["B.TXT"] });
+    expect(find("b.txt", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: ["B.TXT"] });
+  });
+
+  test("the root has no dot entries", () => {
+    expect(find("*.*")).toMatchObject({ names: ["A.TXT", "HIDDEN.TXT", "SYS.DAT", "SUB"] });
+  });
+
+  test("includes hidden and system entries", () => {
+    expect(find("*")).toMatchObject({ names: ["A.TXT", "HIDDEN.TXT", "SYS.DAT", "SUB"] });
+  });
+
+  test("lists a directory named by the spec", () => {
+    expect(find("sub")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(find("sub\\")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(find("c:\\sub")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+  });
+
+  test("lists the working directory for a bare drive or a dot", () => {
+    expect(find("c:", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(find(".", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: [".", "..", "B.TXT"] });
+    expect(find("..", "C:\\SUB")).toMatchObject({ path: "C:\\" });
+  });
+
+  test("returns one file under its directory", () => {
+    expect(find("a.txt")).toEqual({ path: "C:\\", names: ["A.TXT"] });
+    expect(find("sub\\b.txt")).toEqual({ path: "C:\\SUB", names: ["B.TXT"] });
+  });
+
+  test("matches a pattern in a directory", () => {
+    expect(find("*.txt")).toEqual({ path: "C:\\", names: ["A.TXT", "HIDDEN.TXT"] });
+    expect(find("\\sub\\?.t*", "C:\\SUB")).toEqual({ path: "C:\\SUB", names: ["B.TXT"] });
+  });
+
+  test("gives no entries when nothing matches", () => {
+    expect(find("*.zzz")).toEqual({ path: "C:\\", names: [] });
+    expect(find("missing.txt")).toEqual({ path: "C:\\", names: [] });
+  });
+
+  test("reports the directory's own details", () => {
+    const result = findEntries(tree, "C:\\", "sub");
+
+    expect(result.ok && result.value.modified).toEqual(new Date(Date.UTC(1993, 9, 1, 8, 5)));
+    expect(result.ok && result.value.isRoot).toBe(false);
+    expect(findEntries(tree, "C:\\", "")).toMatchObject({ ok: true, value: { isRoot: true } });
+  });
+
+  test.each([
+    ["\\nowhere\\*.txt", "PathNotFound"],
+    ["nowhere\\a.txt", "PathNotFound"],
+    ["a.txt\\*.txt", "PathNotFound"],
+    ["a.txt\\", "PathNotFound"],
+    ["s*\\*.txt", "PathNotFound"],
+    ["d:*.txt", "InvalidDrive"],
+    ["d:", "InvalidDrive"],
+    ["a+b", "InvalidName"],
+    ["a.b.c*", "InvalidName"],
+    ["..\\x", "PathNotFound"],
+  ])("fails for %j with %s", (spec, error) => {
+    expect(find(spec)).toBe(error);
+  });
 });

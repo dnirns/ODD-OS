@@ -81,3 +81,28 @@ describe("toShellKey", () => {
     expect(press("constructor")).toBeUndefined();
   });
 });
+
+describe("keys that must not continue a paused listing", () => {
+  test.each(["Shift", "Control", "Alt", "Meta", "CapsLock"])("%s alone gives no key", (key) => {
+    expect(press(key)).toBeUndefined();
+  });
+
+  test.each([
+    ["r", { metaKey: true }],
+    ["r", { ctrlKey: true }],
+    ["c", { ctrlKey: true }],
+    ["l", { metaKey: true }],
+  ])("%s with a Cmd or Ctrl modifier gives no key", (key, modifiers) => {
+    expect(press(key, modifiers)).toBeUndefined();
+  });
+
+  test.each(["F1", "F5", "F12"])("%s gives no key", (key) => {
+    expect(press(key)).toBeUndefined();
+  });
+});
+
+describe("keys that continue a paused listing", () => {
+  test.each(["Enter", " ", "Escape", "ArrowUp", "ArrowDown", "a", "Tab"])("%j gives a key", (key) => {
+    expect(press(key)).toBeDefined();
+  });
+});

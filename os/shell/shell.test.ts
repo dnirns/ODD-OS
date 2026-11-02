@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest";
 
 import { COLUMNS, createScreen, moveCursor, ROWS, type Screen, writeText } from "../terminal/screen";
 import { applySteps, createBootScreen, createBootSteps } from "../boot/bootSteps";
+import type { Disk } from "../fs/disk";
+import { directory, textFile } from "../fs/entries";
 import { PROMPT } from "./prompt";
 import { createShell, reduceShell, type ShellState } from "./shell";
 import type { ShellKey } from "./shellKeys";
@@ -426,9 +428,10 @@ describe("running commands", () => {
     const shell = run(shellAt(0), "help");
 
     expect(rowText(shell.screen, 1)).toContain("type HELP command-name");
-    expect(rowText(shell.screen, 2)).toBe("CLS      Clears the screen.");
-    expect(rowText(shell.screen, 7)).toBe("VER      Displays the ODD/OS version.");
-    expect(rows(shell, 8, 9)).toEqual(["", PROMPT]);
+    expect(rowText(shell.screen, 2)).toBe("CD       Displays the name of or changes the current directory.");
+    expect(rowText(shell.screen, 4)).toBe("CLS      Clears the screen.");
+    expect(rowText(shell.screen, 11)).toBe("VER      Displays the ODD/OS version.");
+    expect(rows(shell, 12, 13)).toEqual(["", PROMPT]);
   });
 
   test("MEM scrolls within the screen from the bottom row", () => {
@@ -531,5 +534,299 @@ describe("date and time prompts", () => {
     const before = run(shellAt(0), "date 12-25-93");
 
     expect(run(before, "ver").clock).toEqual(before.clock);
+  });
+});
+
+describe("The prompt shows the working directory", () => {
+  test("is C:\\> at the start", () => {
+    const screen = applySteps(createBootScreen(), createBootSteps());
+
+    expect(rowText(screen, 6)).toBe("C:\\>");
+  });
+
+  test("follows a directory change", () => {
+    const shell = run(shellAt(0), "cd dos");
+
+    expect(rowText(shell.screen, 1)).toBe("C:\\DOS>");
+    expect(cursorAt(shell)).toEqual([1, 7]);
+  });
+
+  test("a silent change leaves no blank row", () => {
+    const shell = run(shellAt(0), "cd dos");
+
+    expect(rowText(shell.screen, 0)).toBe("C:\\>cd dos");
+    expect(rowText(shell.screen, 1)).toBe("C:\\DOS>");
+  });
+
+  test("a printed result is followed by a blank row and the new prompt", () => {
+    const shell = run(shellAt(0), "cd dos", "cd");
+
+    expect(rowText(shell.screen, 2)).toBe("C:\\DOS");
+    expect(rowText(shell.screen, 3)).toBe("");
+    expect(rowText(shell.screen, 4)).toBe("C:\\DOS>");
+  });
+
+  test("an empty line keeps the longer prompt", () => {
+    const shell = run(shellAt(0), "cd dos", "");
+
+    expect(rowText(shell.screen, 2)).toBe("C:\\DOS>");
+  });
+
+  test("typed text follows the prompt", () => {
+    const shell = press(run(shellAt(0), "cd dos"), ...type("ver"));
+
+    expect(rowText(shell.screen, 1)).toBe("C:\\DOS>ver");
+    expect(cursorAt(press(shell, home))).toEqual([1, 7]);
+  });
+
+  test("editing keys leave the prompt alone", () => {
+    const shell = press(run(shellAt(0), "cd dos"), backspace, left, del);
+
+    expect(rowText(shell.screen, 1)).toBe("C:\\DOS>");
+  });
+
+  test("Esc leaves only the longer prompt", () => {
+    const shell = press(run(shellAt(0), "cd dos"), ...type("ver"), escape);
+
+    expect(rowText(shell.screen, 1)).toBe("C:\\DOS>");
+    expect(cursorAt(shell)).toEqual([1, 7]);
+  });
+
+  test("a line wraps after a long prompt as after a short one", () => {
+    const shell = press(run(shellAt(0), "cd dos"), ...type("x".repeat(80)));
+
+    expect(rowText(shell.screen, 1)).toBe(`C:\\DOS>${"x".repeat(73)}`);
+    expect(rowText(shell.screen, 2)).toBe("x".repeat(7));
+  });
+
+  test("the drive command keeps the directory", () => {
+    const shell = run(shellAt(0), "cd dos", "c:");
+
+    expect(rowText(shell.screen, 2)).toBe("C:\\DOS>");
+  });
+
+  test("an invalid drive prints a message and keeps the prompt", () => {
+    const shell = run(shellAt(0), "a:");
+
+    expect(rowText(shell.screen, 1)).toBe("Invalid drive specification");
+    expect(rowText(shell.screen, 3)).toBe("C:\\>");
+  });
+
+  test("CLS in a subdirectory shows the longer prompt", () => {
+    const shell = run(shellAt(5), "cd dos", "cls");
+
+    expect(rowText(shell.screen, 1)).toBe("C:\\DOS>");
+  });
+
+  test("history is kept across directory changes", () => {
+    const shell = press(run(shellAt(0), "cd dos"), up);
+
+    expect(shell.line).toBe("cd dos");
+  });
+});
+
+const PAUSE = "Press any key to continue . . .";
+const WHEN = new Date(Date.UTC(1993, 8, 14, 9, 12));
+
+const diskWithFiles = (count: number): Disk => ({
+  filesystem: {
+    root: directory(
+      "",
+      WHEN,
+      Array.from({ length: count }, (_, index) => textFile(`F${String(index).padStart(2, "0")}.TXT`, WHEN, "x")),
+    ),
+  },
+  cwd: "C:\\",
+});
+
+const shellWithFiles = (count: number) =>
+  createShell(
+    moveCursor(writeText(createScreen(), 0, 0, PROMPT), 0, PROMPT.length),
+    CLOCK,
+    diskWithFiles(count),
+  );
+
+const screenRows = (state: ShellState) =>
+  state.screen.rows.map((_, row) => rowText(state.screen, row));
+
+const pauseRow = (state: ShellState) => screenRows(state).lastIndexOf(PAUSE);
+
+describe("Paged listings", () => {
+  test("output that fits shows no pause", () => {
+    const shell = run(shellAt(0), "dir /p");
+
+    expect(screenRows(shell)).not.toContain(PAUSE);
+    expect(shell.input).toEqual({ type: "command" });
+    expect(screenRows(shell).some((row) => row.endsWith("bytes free"))).toBe(true);
+  });
+
+  test("output that does not fit stops after 23 rows", () => {
+    const shell = run(shellWithFiles(40), "dir /p");
+
+    expect(rowText(shell.screen, 0)).toBe("C:\\>dir /p");
+    expect(rowText(shell.screen, 1)).toBe(" Volume in drive C has no label");
+    expect(rowText(shell.screen, 23)).toContain("F18");
+    expect(rowText(shell.screen, 24)).toBe(PAUSE);
+    expect(cursorAt(shell)).toEqual([24, PAUSE.length]);
+    expect(shell.input.type).toBe("pause");
+  });
+
+  test("the prompt does not appear while paused", () => {
+    expect(screenRows(run(shellWithFiles(40), "dir /p")).some((row) => row.startsWith("C:\\>") && row !== "C:\\>dir /p")).toBe(false);
+  });
+
+  test("a key shows the next rows", () => {
+    const shell = press(run(shellWithFiles(40), "dir /p"), ...type("x"));
+    const rows = screenRows(shell);
+
+    expect(rows.some((row) => row.includes("F39"))).toBe(true);
+    expect(rows.some((row) => row.endsWith("bytes free"))).toBe(true);
+  });
+
+  test.each([
+    ["Enter", enter],
+    ["Space", { type: "char", char: " " } as ShellKey],
+    ["Esc", escape],
+    ["an arrow key", up],
+    ["a letter", { type: "char", char: "q" } as ShellKey],
+    ["Backspace", backspace],
+    ["Tab", key("ignore")],
+  ])("%s continues the listing", (_name, item) => {
+    const shell = press(run(shellWithFiles(40), "dir /p"), item);
+
+    expect(shell.input).toEqual({ type: "command" });
+    expect(screenRows(shell).some((row) => row.endsWith("bytes free"))).toBe(true);
+  });
+
+  test("pauses again on later pages", () => {
+    const shell = press(run(shellWithFiles(80), "dir /p"), enter);
+
+    expect(shell.input.type).toBe("pause");
+    expect(pauseRow(shell)).toBe(24);
+  });
+
+  test("the last page ends with the prompt and no further pause", () => {
+    const shell = press(run(shellWithFiles(40), "dir /p"), enter);
+
+    expect(shell.input).toEqual({ type: "command" });
+    expect(screenRows(shell).at(-1)).toBe(PROMPT);
+    expect(cursorAt(shell)).toEqual([24, PROMPT.length]);
+  });
+
+  test("a blank row precedes the prompt as after other output", () => {
+    const rows = screenRows(press(run(shellWithFiles(40), "dir /p"), enter));
+
+    expect(rows.at(-2)).toBe("");
+    expect(rows.at(-3)).toMatch(/bytes free$/);
+  });
+
+  test("works with /W", () => {
+    const shell = run(shellWithFiles(300), "dir /w /p");
+
+    expect(shell.input.type).toBe("pause");
+    expect(screenRows(shell)[24]).toBe(PAUSE);
+  });
+});
+
+describe("Pausing output", () => {
+  test("typing while paused shows nothing and continues", () => {
+    const shell = press(run(shellWithFiles(40), "dir /p"), ...type("z"));
+
+    expect(screenRows(shell).some((row) => row.includes("z"))).toBe(false);
+    expect(screenRows(shell).some((row) => row.endsWith("bytes free"))).toBe(true);
+  });
+
+  test("history keys continue without recalling", () => {
+    const before = run(shellWithFiles(40), "dir /p");
+    const shell = press(before, up);
+
+    expect(shell.line).toBe("");
+    expect(shell.input).toEqual({ type: "command" });
+  });
+
+  test("editing keys do not edit the line", () => {
+    const shell = press(run(shellWithFiles(500), "dir /p"), ...type("abc"), backspace);
+
+    expect(shell.input.type).toBe("pause");
+    expect(shell.line).toBe("");
+  });
+
+  test("pressing keys at every pause always reaches the prompt", () => {
+    let shell = run(shellWithFiles(500), "dir /p");
+    let presses = 0;
+
+    while (shell.input.type === "pause" && presses < 100) {
+      shell = press(shell, enter);
+      presses += 1;
+    }
+
+    expect(shell.input).toEqual({ type: "command" });
+    expect(presses).toBeGreaterThan(1);
+    expect(screenRows(shell).at(-1)).toBe(PROMPT);
+  });
+
+  test("the command line works again afterwards", () => {
+    const shell = press(press(run(shellWithFiles(40), "dir /p"), enter), ...type("ver"));
+
+    expect(screenRows(shell).at(-1)).toBe(`${PROMPT}ver`);
+  });
+
+  test("entries made while paused stay out of the history", () => {
+    const shell = press(press(run(shellWithFiles(40), "dir /p"), ...type("q")), up);
+
+    expect(shell.line).toBe("dir /p");
+  });
+});
+
+const shellWithText = (text: string, row = 0) =>
+  createShell(
+    moveCursor(writeText(createScreen(), row, 0, PROMPT), row, PROMPT.length),
+    CLOCK,
+    { filesystem: { root: directory("", WHEN, [textFile("T.TXT", WHEN, text)]) }, cwd: "C:\\" },
+  );
+
+describe("Output lines wrap", () => {
+  test("a long output line continues on the next row", () => {
+    const shell = run(shellWithText(`${"x".repeat(100)}\r\n`), "type t.txt");
+
+    expect(rowText(shell.screen, 1)).toBe("x".repeat(80));
+    expect(rowText(shell.screen, 2)).toBe("x".repeat(20));
+    expect(rowText(shell.screen, 3)).toBe("");
+    expect(rowText(shell.screen, 4)).toBe(PROMPT);
+  });
+
+  test("an 80-column line fills one row and adds no blank row", () => {
+    const shell = run(shellWithText(`${"x".repeat(80)}\r\n`), "type t.txt");
+
+    expect(rowText(shell.screen, 1)).toBe("x".repeat(80));
+    expect(rowText(shell.screen, 2)).toBe("");
+    expect(rowText(shell.screen, 3)).toBe(PROMPT);
+  });
+
+  test("a long line starting on the bottom row scrolls and stays whole", () => {
+    const shell = run(shellWithText(`${"y".repeat(100)}\r\n`, 24), "type t.txt");
+
+    expect(rowText(shell.screen, 21)).toBe("y".repeat(80));
+    expect(rowText(shell.screen, 22)).toBe("y".repeat(20));
+    expect(rowText(shell.screen, 24)).toBe(PROMPT);
+  });
+
+  test("a tab in output advances to the next 8-column stop", () => {
+    const shell = run(shellWithText("a\tb\r\n"), "type t.txt");
+
+    expect(rowText(shell.screen, 1)).toBe("a       b");
+    expect(rowText(shell.screen, 1).indexOf("b")).toBe(8);
+  });
+
+  test("a tab in typed input is still ignored", () => {
+    const shell = press(shellAt(0), ...type("a"), key("ignore"), ...type("b"));
+
+    expect(rowText(shell.screen, 0)).toBe("C:\\>ab");
+  });
+
+  test("short output is unchanged", () => {
+    const shell = run(shellAt(0), "ver");
+
+    expect(rowText(shell.screen, 2)).toBe("ODD/OS Version 3.14");
   });
 });

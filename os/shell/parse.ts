@@ -6,7 +6,10 @@ export type ParsedCommand = {
 };
 
 const LEADING_DELIMITERS = /^[ \t,;=]+/;
-const COMMAND_NAME = /^[^ \t,;=/]*/;
+// MS-DOS 4.0 ends a built-in command name at these characters, so `CD..`,
+// `CD\DOS` and `DIR/W` run their commands.
+const COMMAND_NAME = /^[^ \t,;=/.\\"[\]:<|>+\u0000-\u001f]*/;
+const DRIVE_COMMAND = /^([A-Za-z]):[\\/]?[ \t,;=]*$/;
 const DELIMITERS = /[ \t,;=]+/;
 
 export const trimDelimiters = (text: string) =>
@@ -30,3 +33,6 @@ export const parseCommand = (line: string): ParsedCommand => {
       .map((part) => part.toUpperCase()),
   };
 };
+
+export const parseDriveCommand = (line: string): string | undefined =>
+  DRIVE_COMMAND.exec(line.replace(LEADING_DELIMITERS, ""))?.[1].toUpperCase();

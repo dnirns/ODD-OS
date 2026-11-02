@@ -1,7 +1,28 @@
+import type { Disk } from "../fs/disk";
 import { MACHINE } from "../machine";
 import { type Clock, readClock, setDate, setTime } from "./clock";
 import { formatDate, formatTime, parseDate, parseTime } from "./dateTime";
-import { type ParsedCommand, parseCommand, trimDelimiters } from "./parse";
+import {
+  CD_HELP,
+  CD_SUMMARY,
+  DIR_HELP,
+  DIR_SUMMARY,
+  INVALID_DRIVE,
+  INVALID_SWITCH,
+  print,
+  runCd,
+  runDir,
+  runType,
+  TOO_MANY_PARAMETERS,
+  TYPE_HELP,
+  TYPE_SUMMARY,
+} from "./fileCommands";
+import {
+  type ParsedCommand,
+  parseCommand,
+  parseDriveCommand,
+  trimDelimiters,
+} from "./parse";
 
 export type PromptInput = "date" | "time";
 
@@ -13,11 +34,14 @@ export type CommandResult =
       readonly input: PromptInput;
       readonly lines: readonly string[];
     }
-  | { readonly type: "setClock"; readonly clock: Clock };
+  | { readonly type: "setClock"; readonly clock: Clock }
+  | { readonly type: "setDirectory"; readonly cwd: string }
+  | { readonly type: "page"; readonly lines: readonly string[] };
 
 export type CommandContext = {
   readonly clock: Clock;
   readonly now: number;
+  readonly disk: Disk;
 };
 
 type Command = {
@@ -30,19 +54,12 @@ type Command = {
 };
 
 const BAD_COMMAND = "Bad command or file name";
-const INVALID_SWITCH = "Invalid switch";
-const TOO_MANY_PARAMETERS = "Too many parameters";
 
 const CONVENTIONAL_KB = 640;
 const RESERVED_KB = 384;
 const CONVENTIONAL_USED_KB = 57;
 const EXTENDED_USED_KB = 64;
 const LARGEST_PROGRAM_BYTES = 596_864;
-
-const print = (...lines: readonly string[]): CommandResult => ({
-  type: "print",
-  lines,
-});
 
 const withoutSwitches =
   (run: () => CommandResult) =>
@@ -131,11 +148,14 @@ const showHelp = (
 };
 
 const COMMANDS: Readonly<Record<string, Command>> = {
+  CD: { summary: CD_SUMMARY, help: CD_HELP, run: runCd },
+  CHDIR: { summary: CD_SUMMARY, help: CD_HELP, run: runCd },
   CLS: {
     summary: "Clears the screen.",
     help: ["Clears the screen.", "", "CLS"],
     run: withoutSwitches(() => ({ type: "clear" })),
   },
+  DIR: { summary: DIR_SUMMARY, help: DIR_HELP, run: runDir },
   DATE: {
     summary: "Displays or sets the date.",
     help: [
@@ -190,6 +210,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
           )
         : applyTime(tail, context),
   },
+  TYPE: { summary: TYPE_SUMMARY, help: TYPE_HELP, run: runType },
   VER: {
     summary: "Displays the ODD/OS version.",
     help: ["Displays the ODD/OS version.", "", "VER"],
@@ -201,6 +222,13 @@ export const runCommand = (
   line: string,
   context: CommandContext,
 ): CommandResult => {
+  const drive = parseDriveCommand(line);
+  if (drive !== undefined) {
+    return drive === "C"
+      ? { type: "setDirectory", cwd: context.disk.cwd }
+      : print(INVALID_DRIVE);
+  }
+
   const parsed = parseCommand(line);
 
   if (!Object.hasOwn(COMMANDS, parsed.name)) return print(BAD_COMMAND);
