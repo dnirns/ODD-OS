@@ -1,4 +1,5 @@
 import {
+  clearScreen,
   COLUMNS,
   moveCursor,
   ROWS,
@@ -6,6 +7,13 @@ import {
   scrollUp,
   writeText,
 } from "../terminal/screen";
+import type { Clock } from "./clock";
+import {
+  answerPrompt,
+  type CommandResult,
+  type PromptInput,
+  runCommand,
+} from "./commands";
 import {
   addEntry,
   createHistory,
@@ -19,12 +27,18 @@ import { PROMPT } from "./prompt";
 import type { ShellKey } from "./shellKeys";
 
 const MAX_LINE_LENGTH = 127;
-const BAD_COMMAND = "Bad command or file name";
+
+const PROMPT_TEXT: Readonly<Record<PromptInput, string>> = {
+  date: "Enter new date (mm-dd-yy): ",
+  time: "Enter new time: ",
+};
 
 type Position = {
   readonly row: number;
   readonly column: number;
 };
+
+type InputMode = { readonly type: "command" } | { readonly type: PromptInput };
 
 export type ShellState = {
   readonly screen: Screen;
@@ -33,6 +47,13 @@ export type ShellState = {
   readonly cursor: number;
   readonly overstrike: boolean;
   readonly history: History;
+  readonly input: InputMode;
+  readonly clock: Clock;
+};
+
+export type ShellAction = {
+  readonly key: ShellKey;
+  readonly now: number;
 };
 
 const cellAt = ({ row, column }: Position, offset: number): Position => ({
@@ -102,7 +123,12 @@ const removeAt = (state: ShellState, index: number): ShellState =>
   });
 
 const recall = (state: ShellState, history: History): ShellState => {
-  if (history.position === state.history.position) return state;
+  if (
+    state.input.type !== "command" ||
+    history.position === state.history.position
+  ) {
+    return state;
+  }
 
   const line = history.entries[history.position ?? 0];
   return { ...redraw(state, { line, cursor: line.length }), history };
@@ -119,38 +145,84 @@ const nextRow = (screen: Screen): Screen => {
 const printLine = (screen: Screen, text: string): Screen =>
   nextRow(writeText(screen, screen.cursor.row, 0, text));
 
-const showPrompt = (screen: Screen): Screen => {
+const printLines = (screen: Screen, lines: readonly string[]): Screen =>
+  lines.reduce(printLine, screen);
+
+const showPrompt = (screen: Screen, prompt: string): Screen => {
   const { row } = screen.cursor;
-  return moveCursor(writeText(screen, row, 0, PROMPT), row, PROMPT.length);
+  return moveCursor(writeText(screen, row, 0, prompt), row, prompt.length);
 };
 
-const submit = ({ screen, lineStart, line, history }: ShellState): ShellState => {
+const startLine = (state: ShellState, screen: Screen): ShellState => ({
+  ...state,
+  screen,
+  lineStart: screen.cursor,
+  line: "",
+  cursor: 0,
+  overstrike: false,
+});
+
+const toCommandPrompt = (state: ShellState, screen: Screen): ShellState => ({
+  ...startLine(state, showPrompt(screen, PROMPT)),
+  input: { type: "command" },
+});
+
+const applyResult = (
+  state: ShellState,
+  screen: Screen,
+  result: CommandResult,
+): ShellState => {
+  switch (result.type) {
+    case "print":
+      return toCommandPrompt(state, nextRow(printLines(screen, result.lines)));
+    case "clear":
+      return toCommandPrompt(state, nextRow(clearScreen(screen)));
+    case "ask":
+      return {
+        ...startLine(
+          state,
+          showPrompt(printLines(screen, result.lines), PROMPT_TEXT[result.input]),
+        ),
+        input: { type: result.input },
+      };
+    case "setClock":
+      return toCommandPrompt({ ...state, clock: result.clock }, nextRow(screen));
+  }
+};
+
+const submit = (state: ShellState, now: number): ShellState => {
+  const { screen, lineStart, line, history, input, clock } = state;
   const end = cellAt(lineStart, line.length);
   const afterLine = nextRow(moveCursor(screen, end.row, end.column));
-  const isBlank = line.trim() === "";
-  const output = isBlank ? afterLine : nextRow(printLine(afterLine, BAD_COMMAND));
-  const prompted = showPrompt(output);
+  const context = { clock, now };
 
-  return {
-    screen: prompted,
-    lineStart: prompted.cursor,
-    line: "",
-    cursor: 0,
-    overstrike: false,
-    history: isBlank ? history : addEntry(history, line),
-  };
+  if (input.type !== "command") {
+    return applyResult(state, afterLine, answerPrompt(input.type, line, context));
+  }
+  if (line.trim() === "") return toCommandPrompt(state, afterLine);
+
+  return applyResult(
+    { ...state, history: addEntry(history, line) },
+    afterLine,
+    runCommand(line, context),
+  );
 };
 
-export const createShell = (screen: Screen): ShellState => ({
+export const createShell = (screen: Screen, clock: Clock): ShellState => ({
   screen,
   lineStart: { row: screen.cursor.row, column: screen.cursor.column },
   line: "",
   cursor: 0,
   overstrike: false,
   history: createHistory(),
+  input: { type: "command" },
+  clock,
 });
 
-export const reduceShell = (state: ShellState, key: ShellKey): ShellState => {
+export const reduceShell = (
+  state: ShellState,
+  { key, now }: ShellAction,
+): ShellState => {
   const { line, cursor, history } = state;
 
   switch (key.type) {
@@ -181,7 +253,7 @@ export const reduceShell = (state: ShellState, key: ShellKey): ShellState => {
     case "pageDown":
       return recall(state, recallNewest(history));
     case "enter":
-      return submit(state);
+      return submit(state, now);
     case "ignore":
       return state;
   }
