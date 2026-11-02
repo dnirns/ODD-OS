@@ -6,8 +6,8 @@ const CRLF = "\r\n";
 
 const lines = (...text: readonly string[]) => text.map((line) => line + CRLF).join("");
 
-const at = (...parts: [year: number, month: number, day: number, hours: number, minutes: number]) =>
-  new Date(Date.UTC(...parts));
+const at = (year: number, month: number, day: number, hours: number, minutes: number) =>
+  new Date(Date.UTC(year, month - 1, day, hours, minutes));
 
 const DOS_RELEASED = at(1993, 3, 10, 6, 0);
 const DOS_INSTALLED = at(1993, 9, 14, 9, 12);

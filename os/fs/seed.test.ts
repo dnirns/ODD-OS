@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fileSize } from "./entries";
 import { normaliseName } from "./names";
 import { listDirectory, readFile } from "./operations";
+import { resolvePath } from "./path";
 import { createFilesystem } from "./seed";
 import type { Entry, FileEntry } from "./types";
 
@@ -101,6 +102,21 @@ describe("Contents of drive C", () => {
 });
 
 describe("Seeded timestamps", () => {
+  test.each([
+    ["C:\\", "1993-09-14T09:12:00.000Z"],
+    ["C:\\COMMAND.COM", "1993-03-10T06:00:00.000Z"],
+    ["C:\\DOS", "1993-09-14T09:12:00.000Z"],
+    ["C:\\DOS\\HIMEM.SYS", "1993-03-10T06:00:00.000Z"],
+    ["C:\\CONFIG.SYS", "1993-09-14T09:31:00.000Z"],
+    ["C:\\AUTOEXEC.BAT", "1993-09-14T09:31:00.000Z"],
+    ["C:\\ODDWARE", "1993-09-20T16:48:00.000Z"],
+    ["C:\\README.TXT", "1993-09-20T16:52:00.000Z"],
+  ])("%s is modified at %s", (path, expected) => {
+    const resolved = resolvePath(fs, "C:\\", path);
+
+    expect(resolved.ok && resolved.value.entry.modified.toISOString()).toBe(expected);
+  });
+
   test("Independent of the clock", () => {
     vi.useFakeTimers();
 
