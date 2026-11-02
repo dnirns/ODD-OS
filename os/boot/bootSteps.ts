@@ -1,3 +1,4 @@
+import { AUTOEXEC_COMMANDS } from "../autoexec";
 import { MACHINE } from "../machine";
 import {
   clearScreen,
@@ -28,6 +29,8 @@ const MEMORY_ROW = 7;
 const SKIP_PROMPT_ROW = 24;
 const PROMPT_ROW = 6;
 const DEFAULT_PROMPT = "C>";
+
+const [PATH_COMMAND, DOSKEY_COMMAND, PROMPT_COMMAND] = AUTOEXEC_COMMANDS;
 
 const show = (
   delayMs: number,
@@ -101,10 +104,10 @@ export const createBootSteps = ({
         true,
       ),
   },
-  show(1800, 3, [2, `${DEFAULT_PROMPT}PATH C:\\DOS`]),
-  show(500, 4, [3, `${DEFAULT_PROMPT}DOSKEY /INSERT`]),
+  show(1800, 3, [2, `${DEFAULT_PROMPT}${PATH_COMMAND}`]),
+  show(500, 4, [3, `${DEFAULT_PROMPT}${DOSKEY_COMMAND}`]),
   show(300, 5, [4, "DOSKey installed."]),
-  show(500, PROMPT_ROW, [5, `${DEFAULT_PROMPT}PROMPT $P$G`]),
+  show(500, PROMPT_ROW, [5, `${DEFAULT_PROMPT}${PROMPT_COMMAND}`]),
   {
     delayMs: 900,
     apply: (screen) =>
