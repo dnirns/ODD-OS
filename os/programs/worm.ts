@@ -22,15 +22,9 @@ import { formatRecord, HI_PATH, parseRecord } from "./wormHighScore";
 import { appendEntry, type Ending, LOG_PATH } from "./wormLog";
 import { drawGame } from "./wormScreen";
 
-// A cell is 9 pixels wide and 16 tall, so a vertical move takes 16/9 as long
-// to cover the same distance on screen as a horizontal one.
-export const HORIZONTAL_TICK_MS = 120;
-export const VERTICAL_TICK_MS = Math.round((HORIZONTAL_TICK_MS * 16) / 9);
-
-// Timed by the last move made, so the interval only changes on a tick and a
-// key press never restarts the timer.
-const tickFor = ({ heading }: GameState) =>
-  heading === "up" || heading === "down" ? VERTICAL_TICK_MS : HORIZONTAL_TICK_MS;
+// One move per tick in every direction, as text-mode games of the period
+// did: a vertical move covers more of the screen than a horizontal one.
+export const MOVE_MS = 120;
 
 const DIRECTIONS: Partial<Readonly<Record<ProgrammeKey["type"], Direction>>> = {
   up: "up",
@@ -151,7 +145,7 @@ const running = (state: WormState): Running => {
   const current: Running = {
     type: "running",
     screen: drawGame(state.game, state.record),
-    tickMs: state.game.phase === "playing" ? tickFor(state.game) : undefined,
+    tickMs: state.game.phase === "playing" ? MOVE_MS : undefined,
     step: (event) => {
       if (event.type === "key" && event.key.type === "escape") return leave(state, event.now);
 

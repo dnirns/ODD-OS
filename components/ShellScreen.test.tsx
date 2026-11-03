@@ -10,5 +10,5 @@ test("server-renders the screen it was given", () => {
   const markup = renderToStaticMarkup(<ShellScreen screen={screen} disk={createDisk()} />);
 
   expect(markup).toContain("C:\\&gt;");
-  expect(markup).toContain("aria-hidden");
+  expect(markup).toMatch(/class="[^"]*cursor[^"]*"/);
 });

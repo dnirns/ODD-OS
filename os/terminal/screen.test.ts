@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  CELL_HEIGHT,
+  CELL_WIDTH,
   clearScreen,
   COLUMNS,
   createScreen,
   moveCursor,
+  PIXEL_ASPECT,
   ROWS,
   type Screen,
   scrollUp,
@@ -226,5 +229,17 @@ describe("scrollUp", () => {
 
   test.each([ROWS, ROWS + 5])("blanks the screen when scrolled by %i rows", (count) => {
     expect(scrollUp(numbered, count).rows).toEqual(createScreen().rows);
+  });
+});
+
+describe("The picture's shape", () => {
+  test("a 720×400 picture shown at 4:3", () => {
+    expect(COLUMNS * CELL_WIDTH).toBe(720);
+    expect(ROWS * CELL_HEIGHT).toBe(400);
+    expect((COLUMNS * CELL_WIDTH) / (ROWS * CELL_HEIGHT * PIXEL_ASPECT)).toBeCloseTo(4 / 3, 10);
+  });
+
+  test("a cell appears 2.4 times as tall as it is wide", () => {
+    expect((CELL_HEIGHT * PIXEL_ASPECT) / CELL_WIDTH).toBeCloseTo(2.4, 10);
   });
 });

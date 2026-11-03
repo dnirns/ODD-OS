@@ -1,18 +1,23 @@
-.terminal {
+/*
+ * The screen of a VGA monitor: the 80×25 text area, a black overscan border
+ * half the font size deep, and the glass laid over both.
+ *
+ * The 9×16 cells are stretched vertically by --stretch so the picture has the
+ * 4:3 shape of a CRT. At each fixed size a row is a whole number of pixels
+ * (round(1.35 × font size)), so box-drawing characters meet without gaps.
+ * Below the smallest fixed size the picture shrinks to fit at exactly 1.35.
+ */
+.screen {
+  --stretch: 1.35;
   position: relative;
   flex: none;
-  width: 45em;
-  height: 25em;
+  isolation: isolate;
   overflow: hidden;
+  padding: 0.5em;
+  border-radius: 1em;
+  background: var(--dos-black);
   font-family: var(--font-dos), monospace;
-  font-size: min(48px, calc(100vw / 45), calc(100dvh / 25));
-  font-size: min(
-    48px,
-    max(
-      round(down, min(100vw / 45, 100dvh / 25) + 0.01px, 4px),
-      min(100vw / 45, 100dvh / 25, 16px)
-    )
-  );
+  font-size: min(100vw / 46, 100dvh / 34.75);
   font-synthesis: none;
   font-variant-ligatures: none;
   line-height: 1;
@@ -20,16 +25,98 @@
   -webkit-font-smoothing: none;
 }
 
+@media (min-width: 736px) and (min-height: 566px) {
+  .screen {
+    --stretch: calc(22 / 16);
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 920px) and (min-height: 695px) {
+  .screen {
+    --stretch: calc(27 / 20);
+    font-size: 20px;
+  }
+}
+
+@media (min-width: 1104px) and (min-height: 824px) {
+  .screen {
+    --stretch: calc(32 / 24);
+    font-size: 24px;
+  }
+}
+
+@media (min-width: 1288px) and (min-height: 978px) {
+  .screen {
+    --stretch: calc(38 / 28);
+    font-size: 28px;
+  }
+}
+
+@media (min-width: 1472px) and (min-height: 1107px) {
+  .screen {
+    --stretch: calc(43 / 32);
+    font-size: 32px;
+  }
+}
+
+@media (min-width: 1656px) and (min-height: 1261px) {
+  .screen {
+    --stretch: calc(49 / 36);
+    font-size: 36px;
+  }
+}
+
+@media (min-width: 1840px) and (min-height: 1390px) {
+  .screen {
+    --stretch: calc(54 / 40);
+    font-size: 40px;
+  }
+}
+
+@media (min-width: 2024px) and (min-height: 1519px) {
+  .screen {
+    --stretch: calc(59 / 44);
+    font-size: 44px;
+  }
+}
+
+@media (min-width: 2208px) and (min-height: 1673px) {
+  .screen {
+    --stretch: calc(65 / 48);
+    font-size: 48px;
+  }
+}
+
+.picture {
+  width: 45em;
+  height: calc(25em * var(--stretch));
+}
+
+.text {
+  position: relative;
+  width: 45em;
+  height: 25em;
+  transform: scaleY(var(--stretch));
+  transform-origin: 0 0;
+}
+
 .row {
   height: 1em;
   overflow: hidden;
+}
+
+/* Phosphor glow, in each character's own colour. */
+.row > span {
+  text-shadow: 0 0 0.12em color-mix(in srgb, currentColor 45%, transparent);
 }
 
 .cursor {
   position: absolute;
   width: 0.5625em;
   height: 0.125em;
-  animation: blink 0.5s step-end infinite;
+  /* VGA toggles the cursor every 16 frames at 70 Hz. */
+  animation: blink calc(32s / 70) step-end infinite;
 }
 
 @keyframes blink {
@@ -38,8 +125,88 @@
   }
 }
 
+/*
+ * One faint dark band between each of the 400 source lines. Drawn only where
+ * a source line covers at least two device pixels, so it never forms moiré.
+ */
+.scanlines {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 0.03125em,
+    rgb(0 0 0 / 0.22) 0.05em,
+    transparent 0.0625em
+  );
+}
+
+@media (min-width: 1104px) and (min-height: 824px) {
+  .scanlines {
+    display: block;
+  }
+}
+
+@media (min-resolution: 1.5dppx) and (min-width: 736px) and (min-height: 566px) {
+  .scanlines {
+    display: block;
+  }
+}
+
+@media (min-resolution: 2dppx) and (min-width: 546px) and (min-height: 412px) {
+  .scanlines {
+    display: block;
+  }
+}
+
+@media (min-resolution: 3dppx) and (min-width: 364px) and (min-height: 275px) {
+  .scanlines {
+    display: block;
+  }
+}
+
+/* The tube's lit black, darkening toward the edges and corners. */
+.glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.glass::before,
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.glass::before {
+  background: rgb(14 14 14);
+  mix-blend-mode: screen;
+}
+
+.glass::after {
+  background: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgb(0 0 0 / 0.4) 100%
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cursor {
     animation: none;
+  }
+}
+
+@media (prefers-contrast: more), (forced-colors: active) {
+  .row > span {
+    text-shadow: none;
+  }
+
+  .scanlines,
+  .glass {
+    display: none;
   }
 }

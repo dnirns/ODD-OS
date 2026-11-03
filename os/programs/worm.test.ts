@@ -9,7 +9,7 @@ import { createClock } from "../shell/clock";
 import type { Screen } from "../terminal/screen";
 import { programmeFiles } from "./files";
 import type { Exited, ProgrammeEvent, ProgrammeKey, Running } from "./types";
-import { HORIZONTAL_TICK_MS, VERTICAL_TICK_MS, WORM } from "./worm";
+import { MOVE_MS, WORM } from "./worm";
 import { createGame, type Direction, HEIGHT } from "./wormGame";
 import { HI_PATH } from "./wormHighScore";
 import { LOG_PATH } from "./wormLog";
@@ -79,8 +79,8 @@ describe("No timer outside play", () => {
   });
 
   test("Playing", () => {
-    expect(playing().tickMs).toBe(HORIZONTAL_TICK_MS);
-    expect(HORIZONTAL_TICK_MS).toBe(120);
+    expect(playing().tickMs).toBe(MOVE_MS);
+    expect(MOVE_MS).toBe(120);
   });
 
   test("Over", () => {
@@ -94,28 +94,16 @@ describe("No timer outside play", () => {
     const again = step(finished(), press("enter"));
 
     expect(again.tickMs).toBeUndefined();
-    expect(step(again, press("up")).tickMs).toBe(HORIZONTAL_TICK_MS);
+    expect(step(again, press("up")).tickMs).toBe(MOVE_MS);
   });
 });
 
-describe("Even speed on screen", () => {
-  test("a vertical move takes 16/9 as long as a horizontal one", () => {
-    expect(VERTICAL_TICK_MS).toBe(213);
-    expect(VERTICAL_TICK_MS / HORIZONTAL_TICK_MS).toBeCloseTo(16 / 9, 2);
-  });
+describe("One move per tick", () => {
+  test("every direction moves at the same interval", () => {
+    const climbing = step(step(playing(), press("up")), TICK);
 
-  test("the interval follows the last move made, not the key pressed", () => {
-    const turned = step(playing(), press("up"));
-
-    expect(turned.tickMs).toBe(HORIZONTAL_TICK_MS);
-    expect(step(turned, TICK).tickMs).toBe(VERTICAL_TICK_MS);
-    expect(run(turned, TICK, press("left"), TICK).tickMs).toBe(HORIZONTAL_TICK_MS);
-  });
-
-  test("a turn waiting for its move keeps the interval", () => {
-    const moving = playing();
-
-    expect(run(moving, press("up"), press("down"), press("up")).tickMs).toBe(moving.tickMs);
+    expect(climbing.tickMs).toBe(MOVE_MS);
+    expect(run(climbing, press("left"), TICK).tickMs).toBe(MOVE_MS);
   });
 });
 

@@ -10,5 +10,5 @@ test("server-renders 25 blank rows with no cursor", () => {
 
   expect(markup.match(/class="[^"]*row[^"]*"/g)).toHaveLength(25);
   expect(stripTags(markup)).toBe(" ".repeat(2000));
-  expect(markup).not.toContain("aria-hidden");
+  expect(markup).not.toMatch(/class="[^"]*cursor[^"]*"/);
 });

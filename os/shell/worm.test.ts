@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { createDisk } from "../fs/disk";
 import { readFile } from "../fs/operations";
-import { HORIZONTAL_TICK_MS, VERTICAL_TICK_MS } from "../programs/worm";
+import { MOVE_MS } from "../programs/worm";
 import { createScreen, moveCursor, type Screen, writeText } from "../terminal/screen";
 import { createShell, reduceShell, type ShellState, tickInterval, tickShell } from "./shell";
 import type { ShellKey } from "./shellKeys";
@@ -96,14 +96,11 @@ describe("Playing through the shell", () => {
   });
 
   test("an arrow key starts play", () => {
-    expect(tickInterval(press(inGame(), key("right")))).toBe(HORIZONTAL_TICK_MS);
+    expect(tickInterval(press(inGame(), key("right")))).toBe(MOVE_MS);
   });
 
-  test("vertical moves tick more slowly than horizontal ones", () => {
-    const climbing = tick(press(inGame(), key("up")), 1);
-
-    expect(tickInterval(climbing)).toBe(VERTICAL_TICK_MS);
-    expect(tickInterval(tick(press(climbing, key("left")), 1))).toBe(HORIZONTAL_TICK_MS);
+  test("vertical moves tick at the same interval as horizontal ones", () => {
+    expect(tickInterval(tick(press(inGame(), key("up")), 1))).toBe(MOVE_MS);
   });
 
   test("ticks move the worm", () => {

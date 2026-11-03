@@ -42,12 +42,30 @@ test("draws the cursor in its cell's foreground colour", () => {
   const screen = writeText(createScreen(), 0, 0, "A", { fg: "red" });
   const markup = renderToStaticMarkup(<Terminal screen={screen} />);
 
-  expect(markup).toMatch(/aria-hidden="true" style="[^"]*var\(--dos-red\)/);
+  expect(markup).toMatch(/class="[^"]*cursor[^"]*" aria-hidden="true" style="[^"]*var\(--dos-red\)/);
 });
+
+const CURSOR = /class="[^"]*cursor[^"]*"/;
 
 test("renders no cursor when it is hidden", () => {
   const screen = setCursorVisible(createScreen(), false);
   const markup = renderToStaticMarkup(<Terminal screen={screen} />);
 
-  expect(markup).not.toContain("aria-hidden");
+  expect(markup).not.toMatch(CURSOR);
+});
+
+test("the CRT layers are hidden from assistive technology and hold no text", () => {
+  const markup = renderToStaticMarkup(<Terminal screen={setCursorVisible(createScreen(), false)} />);
+  const layers = markup.match(/<div class="[^"]*(scanlines|glass)[^"]*"[^>]*><\/div>/g) ?? [];
+
+  expect(layers).toHaveLength(2);
+  layers.forEach((layer) => expect(layer).toContain('aria-hidden="true"'));
+});
+
+test("the cursor sits in the stretched text layer with the rows", () => {
+  const markup = renderToStaticMarkup(<Terminal screen={createScreen()} />);
+  const text = /<div class="[^"]*text[^"]*">([\s\S]*)<\/div><\/div><div class="[^"]*glass/.exec(markup)?.[1] ?? "";
+
+  expect(text.match(/class="[^"]*row[^"]*"/g)).toHaveLength(25);
+  expect(text).toMatch(CURSOR);
 });

@@ -3,6 +3,12 @@ import { type Color, DEFAULT_BACKGROUND, DEFAULT_FOREGROUND } from "./colors";
 export const COLUMNS = 80;
 export const ROWS = 25;
 
+// A cell is 9×16 source pixels. A VGA monitor showed the 720×400 picture at
+// 4:3, so each pixel appears 1.35 (540/400) times taller than it is wide.
+export const CELL_WIDTH = 9;
+export const CELL_HEIGHT = 16;
+export const PIXEL_ASPECT = 540 / 400;
+
 export type Cell = {
   readonly char: string;
   readonly fg: Color;
