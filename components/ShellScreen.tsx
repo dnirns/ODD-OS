@@ -1,5 +1,7 @@
 import { useEffect, useReducer } from "react";
 
+import type { Disk } from "../os/fs/disk";
+import type { Filesystem } from "../os/fs/types";
 import { startTicker } from "../os/programs/ticker";
 import type { Registry } from "../os/programs/types";
 import { createClock } from "../os/shell/clock";
@@ -17,6 +19,8 @@ import Terminal from "./Terminal";
 
 type ShellScreenProps = {
   screen: Screen;
+  disk: Disk;
+  onFilesChange?: (filesystem: Filesystem) => void;
   programmes?: Registry;
 };
 
@@ -29,12 +33,21 @@ const reduce = (state: ShellState, action: Action): ShellState =>
     ? tickShell(state, action.now)
     : reduceShell(state, action);
 
-const startShell = ({ screen, programmes }: ShellScreenProps) =>
-  createShell(screen, createClock(Date.now()), undefined, programmes);
+type StartProps = Pick<ShellScreenProps, "screen" | "disk" | "programmes">;
 
-const ShellScreen = ({ screen, programmes }: ShellScreenProps) => {
-  const [state, dispatch] = useReducer(reduce, { screen, programmes }, startShell);
+const startShell = ({ screen, disk, programmes }: StartProps) =>
+  createShell(screen, createClock(Date.now()), disk, programmes);
+
+const ShellScreen = ({ screen, disk, onFilesChange, programmes }: ShellScreenProps) => {
+  const [state, dispatch] = useReducer(reduce, { screen, disk, programmes }, startShell);
   const tickMs = tickInterval(state);
+  const { filesystem } = state.disk;
+
+  // Keeps browser storage in step with the files. Changing directory, the
+  // clock or the history leaves `filesystem` as it is, so it saves nothing.
+  useEffect(() => {
+    if (onFilesChange && filesystem !== disk.filesystem) onFilesChange(filesystem);
+  }, [filesystem, disk.filesystem, onFilesChange]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
