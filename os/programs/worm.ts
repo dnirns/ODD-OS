@@ -18,6 +18,7 @@ import {
   restart,
   steer,
 } from "./wormGame";
+import { formatRecord, HI_PATH, parseRecord } from "./wormHighScore";
 import { appendEntry, type Ending, LOG_PATH } from "./wormLog";
 import { drawGame } from "./wormScreen";
 
@@ -47,13 +48,17 @@ const nextGame = (game: GameState, event: ProgrammeEvent): GameState => {
 };
 
 // Everything the programme carries between events. `startedAt` is set while
-// a session is being played; `disk` gains the log entries of ended sessions.
+// a session is being played; `disk` gains the log entries and records of
+// ended sessions. `record` is the best score before the current game began,
+// and `canWrite` is false when WORM.HI holds something the game cannot read.
 type WormState = {
   readonly game: GameState;
   readonly disk: Disk;
   readonly launchDisk: Disk;
   readonly files: ProgrammeFiles;
   readonly startedAt: number | undefined;
+  readonly record: number;
+  readonly canWrite: boolean;
 };
 
 const ENDINGS: Readonly<Record<Over["reason"], Ending>> = {
@@ -67,6 +72,21 @@ const existingLog = (disk: Disk): { readonly ok: true; readonly text: string | u
 
   if (read.ok) return read.value.kind === "text" ? { ok: true, text: read.value.text } : { ok: false };
   return read.error === "FileNotFound" ? { ok: true, text: undefined } : { ok: false };
+};
+
+type StoredRecord =
+  | { readonly kind: "missing" }
+  | { readonly kind: "usable"; readonly score: number }
+  | { readonly kind: "unusable" };
+
+const storedRecord = (disk: Disk): StoredRecord => {
+  const read = readFile(disk.filesystem, disk.cwd, HI_PATH);
+
+  if (!read.ok) return read.error === "FileNotFound" ? { kind: "missing" } : { kind: "unusable" };
+  if (read.value.kind !== "text") return { kind: "unusable" };
+
+  const score = parseRecord(read.value.text);
+  return score === undefined ? { kind: "unusable" } : { kind: "usable", score };
 };
 
 // Appends one entry for the session that just ended. Any problem with the
@@ -91,8 +111,22 @@ const logSession = (state: WormState, game: GameState, ending: Ending, now: numb
   return written.ok ? written.value : state.disk;
 };
 
+// Writes a record the session set. A file the game cannot read is never
+// overwritten, and a failed write leaves the disk as it was.
+const saveRecord = (state: WormState, disk: Disk, game: GameState, now: number): Disk => {
+  if (!state.canWrite || game.score <= state.record) return disk;
+
+  const written = state.files.write(disk, HI_PATH, formatRecord(game.score), now);
+  return written.ok ? written.value : disk;
+};
+
+// The log entry and the record are written one after the other, so either
+// can fail without affecting the other.
+const endSession = (state: WormState, game: GameState, ending: Ending, now: number): Disk =>
+  saveRecord(state, logSession(state, game, ending, now), game, now);
+
 const leave = (state: WormState, now: number): Exited => {
-  const disk = state.game.phase === "playing" ? logSession(state, state.game, "operator", now) : state.disk;
+  const disk = state.game.phase === "playing" ? endSession(state, state.game, "operator", now) : state.disk;
   return disk === state.launchDisk ? { type: "exit" } : { type: "exit", disk };
 };
 
@@ -102,9 +136,11 @@ const nextState = (state: WormState, event: ProgrammeEvent): WormState => {
 
   if (game.phase === "playing" && state.game.phase === "ready") return { ...state, game, startedAt: event.now };
   if (game.phase === "over" && state.game.phase === "playing") {
-    return { ...state, game, disk: logSession(state, game, ENDINGS[game.reason], event.now), startedAt: undefined };
+    return { ...state, game, disk: endSession(state, game, ENDINGS[game.reason], event.now), startedAt: undefined };
   }
-  if (game.phase === "ready") return { ...state, game, startedAt: undefined };
+  if (game.phase === "ready") {
+    return { ...state, game, startedAt: undefined, record: Math.max(state.record, state.game.score) };
+  }
 
   return { ...state, game };
 };
@@ -114,7 +150,7 @@ const nextState = (state: WormState, event: ProgrammeEvent): WormState => {
 const running = (state: WormState): Running => {
   const current: Running = {
     type: "running",
-    screen: drawGame(state.game),
+    screen: drawGame(state.game, state.record),
     tickMs: state.game.phase === "playing" ? tickFor(state.game) : undefined,
     step: (event) => {
       if (event.type === "key" && event.key.type === "escape") return leave(state, event.now);
@@ -129,6 +165,17 @@ const running = (state: WormState): Running => {
 
 export const WORM: FullscreenProgramme = {
   kind: "fullscreen",
-  start: (_args, { now, disk, files }) =>
-    running({ game: createGame(now), disk, launchDisk: disk, files, startedAt: undefined }),
+  start: (_args, { now, disk, files }) => {
+    const stored = storedRecord(disk);
+
+    return running({
+      game: createGame(now),
+      disk,
+      launchDisk: disk,
+      files,
+      startedAt: undefined,
+      record: stored.kind === "usable" ? stored.score : 0,
+      canWrite: stored.kind !== "unusable",
+    });
+  },
 };

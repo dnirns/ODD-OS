@@ -276,3 +276,100 @@ describe("WORM.LOG through the shell", () => {
     expect(shell.disk.cwd).toBe("C:\\ODDWARE");
   });
 });
+
+describe("WORM.HI through the shell", () => {
+  type Way = "up" | "down" | "left" | "right";
+  const OPPOSITE: Readonly<Record<Way, Way>> = { up: "down", down: "up", left: "right", right: "left" };
+
+  const find = (screen: Screen, char: string) => {
+    for (let row = 2; row <= 22; row += 1) {
+      const column = rowText(screen, row).indexOf(char, 1);
+      if (column >= 1) return { x: column - 1, y: row - 2 };
+    }
+    throw new Error(`no ${char} on the playfield`);
+  };
+
+  const scoreOf = (state: ShellState) => Number(/SCORE: (\d+)/.exec(rowText(state.screen, 0))?.[1]);
+
+  // Steers to the food until the score reaches `target`, then runs into a wall.
+  const record = (state: ShellState, target: number) => {
+    let heading: Way = "right";
+    let shell = press(run(state, "worm"), key(heading));
+
+    for (let count = 0; count < 5_000 && scoreOf(shell) < target; count += 1) {
+      const head = find(shell.screen, "@");
+      const food = find(shell.screen, "*");
+      const across: Way | undefined = food.x > head.x ? "right" : food.x < head.x ? "left" : undefined;
+      const along: Way | undefined = food.y > head.y ? "down" : food.y < head.y ? "up" : undefined;
+      let wanted: Way = across ?? along ?? heading;
+
+      if (wanted === OPPOSITE[heading]) {
+        const vertical: boolean = heading === "up" || heading === "down";
+        wanted = vertical ? (across ?? (head.x > 0 ? "left" : "right")) : (along ?? (head.y > 0 ? "up" : "down"));
+      }
+
+      heading = wanted;
+      shell = tick(press(shell, key(heading)));
+    }
+
+    const over = tick(shell, 100);
+    return { score: scoreOf(over), shell: press(over, escape) };
+  };
+
+  const screenText = (state: ShellState) => allRows(state.screen).join("\n");
+
+  test("Not there at first", () => {
+    const rows = allRows(run(shellIn("C:\\"), "dir \\oddware").screen);
+
+    expect(rows.some((text) => text.startsWith("WORM     EXE"))).toBe(true);
+    expect(rows.some((text) => text.startsWith("WORM     HI"))).toBe(false);
+    expect(rows.some((text) => /^ +1 file\(s\)/.test(text))).toBe(true);
+  });
+
+  test("Created by the first record and listed by DIR", () => {
+    const { score, shell } = record(shellIn("C:\\ODDWARE"), 120);
+    const rows = allRows(run(shell, "dir \\oddware").screen);
+    const exe = rows.findIndex((text) => text.startsWith("WORM     EXE"));
+    const hi = rows.findIndex((text) => text.startsWith("WORM     HI"));
+
+    expect(score).toBeGreaterThanOrEqual(120);
+    expect(hi).toBe(exe + 1);
+    expect(Number(rows[hi].slice(12, 26).replace(/[ ,]/g, ""))).toBe(`${score}\r\n`.length);
+    expect(rows[hi]).toMatch(/11-02-93 +3:45p$/);
+  });
+
+  test("Shown by TYPE", () => {
+    const { score, shell } = record(shellIn("C:\\ODDWARE"), 30);
+
+    expect(screenText(run(shell, "type \\oddware\\worm.hi"))).toContain(`C:\\ODDWARE>type \\oddware\\worm.hi\n${score}\n`);
+  });
+
+  test("The next launch shows the record", () => {
+    const { score, shell } = record(shellIn("C:\\ODDWARE"), 30);
+
+    expect(rowText(run(shell, "worm").screen, 0)).toContain(`HI: ${score}`);
+  });
+
+  test("Nothing else is left behind", () => {
+    const before = shellIn("C:\\ODDWARE");
+    const { shell } = record(before, 30);
+    const others = (disk: ShellState["disk"]) => ({
+      ...disk,
+      filesystem: {
+        root: {
+          ...disk.filesystem.root,
+          entries: disk.filesystem.root.entries
+            .filter(({ name }) => name !== "WORM.LOG")
+            .map((entry) =>
+              entry.kind === "directory" && entry.name === "ODDWARE"
+                ? { ...entry, entries: entry.entries.filter(({ name }) => name !== "WORM.HI") }
+                : entry,
+            ),
+        },
+      },
+    });
+
+    expect(shell.disk.cwd).toBe("C:\\ODDWARE");
+    expect(others(shell.disk)).toEqual(before.disk);
+  });
+});

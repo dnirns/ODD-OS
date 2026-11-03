@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { fileChanges } from "../fs/changes";
 import { createDisk } from "../fs/disk";
 import { ARCHIVE, textFile } from "../fs/entries";
-import { writeFile } from "../fs/operations";
+import { readFile, writeFile } from "../fs/operations";
 import { createFilesystem } from "../fs/seed";
 import { FORMAT, readRecord, startingDisk, toRecord } from "./record";
 
@@ -83,6 +83,19 @@ describe("readRecord", () => {
 
 describe("startingDisk", () => {
   const shipped = createDisk();
+
+  test("a high score WORM.EXE wrote is kept beside it", () => {
+    const written = writeFile(createFilesystem(), "C:\\", "C:\\ODDWARE\\WORM.HI", "120\r\n", NOW);
+    if (!written.ok) throw new Error(written.error);
+
+    const stored = structuredClone(toRecord(fileChanges(createFilesystem(), written.value)));
+    const { disk } = startingDisk({ kind: "read", value: stored });
+    const read = readFile(disk.filesystem, "C:\\", "C:\\ODDWARE\\WORM.HI");
+    const oddware = disk.filesystem.root.entries.find(({ name }) => name === "ODDWARE");
+
+    expect(read.ok && read.value).toEqual({ kind: "text", text: "120\r\n" });
+    expect(oddware?.kind === "directory" && oddware.entries.map(({ name }) => name)).toEqual(["WORM.EXE", "WORM.HI"]);
+  });
 
   test("nothing stored gives the shipped disk, saving", () => {
     expect(startingDisk({ kind: "read", value: undefined })).toEqual({ disk: shipped, saving: true });

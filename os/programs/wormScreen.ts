@@ -18,12 +18,14 @@ export const FOOD = "*";
 
 export const SCORE_COLUMN = 30;
 export const LENGTH_COLUMN = 50;
+export const HI_COLUMN = 66;
 export const KEYS_ROW = 24;
 export const MESSAGE_ROW = FIELD_TOP + Math.floor(HEIGHT / 2) - 1;
 
 export const MESSAGES = {
   crashed: "GAME OVER",
   full: "YOU FILLED THE FIELD",
+  record: "NEW HIGH SCORE",
   restart: "Press Enter to play again or Esc to exit",
 } as const;
 
@@ -37,6 +39,7 @@ export const EXIT_KEY = "Esc exits to DOS";
 
 const SCORE_LABEL = "SCORE: ";
 const LENGTH_LABEL = "LENGTH: ";
+const HI_LABEL = "HI: ";
 
 type Color = NonNullable<TextStyle["fg"]>;
 
@@ -54,7 +57,7 @@ const sides = Array.from({ length: HEIGHT }, (_, y): readonly Line[] => [
 const FRAME = [
   { color: "cyan", lines: [[1, 0, `╔${"═".repeat(WIDTH)}╗`], ...sides, [FIELD_TOP + HEIGHT, 0, `╚${"═".repeat(WIDTH)}╝`]] },
   { color: "white", lines: [[0, 2, "WORM"]] },
-  { color: "light-grey", lines: [[0, SCORE_COLUMN, SCORE_LABEL], [0, LENGTH_COLUMN, LENGTH_LABEL]] },
+  { color: "light-grey", lines: [[0, SCORE_COLUMN, SCORE_LABEL], [0, LENGTH_COLUMN, LENGTH_LABEL], [0, HI_COLUMN, HI_LABEL]] },
   { color: "dark-grey", lines: [[KEYS_ROW, COLUMNS - 2 - EXIT_KEY.length, EXIT_KEY]] },
 ] satisfies readonly { color: Color; lines: readonly Line[] }[];
 
@@ -70,12 +73,15 @@ const centred = (row: number, text: string): Line => {
   return [row, FIELD_LEFT + Math.floor((WIDTH - padded.length) / 2), padded];
 };
 
-export const drawGame = (game: GameState): Screen => {
+// `record` is the best score before this game began; the header shows the
+// greater of it and the score, so it follows the score once passed.
+export const drawGame = (game: GameState, record: number): Screen => {
   const [head, ...body] = game.worm;
 
   let screen = paint(BLANK_FRAME, "white", [
     [0, SCORE_COLUMN + SCORE_LABEL.length, String(game.score)],
     [0, LENGTH_COLUMN + LENGTH_LABEL.length, String(game.worm.length)],
+    [0, HI_COLUMN + HI_LABEL.length, String(Math.max(record, game.score))],
   ]);
   screen = paint(screen, "light-grey", [[KEYS_ROW, 2, KEYS[game.phase]]]);
   screen = paint(screen, "light-red", game.food ? [atCell(game.food, FOOD)] : []);
@@ -85,5 +91,6 @@ export const drawGame = (game: GameState): Screen => {
   if (game.phase !== "over") return screen;
 
   screen = paint(screen, "white", [centred(MESSAGE_ROW, game.reason === "full" ? MESSAGES.full : MESSAGES.crashed)]);
+  screen = paint(screen, "yellow", game.score > record ? [centred(MESSAGE_ROW + 1, MESSAGES.record)] : []);
   return paint(screen, "light-grey", [centred(MESSAGE_ROW + 2, MESSAGES.restart)]);
 };
