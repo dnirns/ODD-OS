@@ -24,7 +24,7 @@ export type Ready = Board & { readonly phase: "ready" };
 export type Playing = Board & { readonly phase: "playing" };
 export type Over = Board & {
   readonly phase: "over";
-  readonly reason: "crashed" | "full";
+  readonly reason: "wall" | "self" | "full";
 };
 
 export type GameState = Ready | Playing | Over;
@@ -48,6 +48,8 @@ const OPENING_WORM: readonly Cell[] = [
   { x: 38, y: 10 },
   { x: 37, y: 10 },
 ];
+
+export const OPENING_LENGTH = OPENING_WORM.length;
 
 const sameCell = (a: Cell) => (b: Cell) => a.x === b.x && a.y === b.y;
 
@@ -117,9 +119,8 @@ export const advance = (game: GameState): GameState => {
   const eats = game.food !== undefined && sameCell(game.food)(next);
   const body = eats ? game.worm : game.worm.slice(0, -1);
 
-  if (isOutside(next) || body.some(sameCell(next))) {
-    return { ...game, phase: "over", reason: "crashed" };
-  }
+  if (isOutside(next)) return { ...game, phase: "over", reason: "wall" };
+  if (body.some(sameCell(next))) return { ...game, phase: "over", reason: "self" };
 
   const worm = [next, ...body];
 

@@ -241,3 +241,36 @@ describe("Ticks", () => {
     expect(tickShell(left, NOW + 100)).toBe(left);
   });
 });
+
+describe("Written files reach the disk on exit", () => {
+  const screenText = (state: ShellState) => allRows(state.screen).join("\n");
+
+  test("Visible after exit", () => {
+    const shell = run(press(launched(), ...type("w"), escape), "dir \\new.txt");
+
+    expect(screenText(shell)).toMatch(/NEW {6}TXT +3 11-01-93 {3}3:45p/);
+  });
+
+  test("not visible while the programme runs", () => {
+    const shell = press(launched(), ...type("w"));
+
+    expect(shell.disk).toEqual(launched().disk);
+  });
+
+  test("the working directory is kept", () => {
+    expect(press(launched(), ...type("w"), escape).disk.cwd).toBe("C:\\ODDWARE");
+  });
+
+  test("Clock set by the visitor", () => {
+    const shell = run(press(run(shellIn("C:\\ODDWARE"), "date 12-25-93", "test"), ...type("w"), escape), "dir \\new.txt");
+
+    expect(screenText(shell)).toMatch(/NEW {6}TXT +3 12-25-93/);
+  });
+
+  test("Failure discards writes", () => {
+    const shell = run(press(launched(), ...type("w"), ...type("x")), "dir \\new.txt");
+
+    expect(shell.running).toBeUndefined();
+    expect(screenText(shell)).toContain("File not found");
+  });
+});

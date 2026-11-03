@@ -58,7 +58,7 @@ const stars = (screen: Screen) =>
     .flatMap((cells) => cells.slice(FIELD_LEFT, FIELD_LEFT + WIDTH))
     .filter(({ char }) => char === FOOD).length;
 
-const over = (reason: "crashed" | "full", game: GameState = createGame(1)): GameState => ({
+const over = (reason: "wall" | "self" | "full", game: GameState = createGame(1)): GameState => ({
   ...game,
   phase: "over",
   reason,
@@ -173,7 +173,7 @@ describe("Key lines", () => {
     expect(text(drawGame(createGame(1)), KEYS_ROW)).toContain("Press an arrow key to start");
   });
 
-  test.each<GameState>([createGame(1), steer(createGame(1), "up"), over("crashed")])(
+  test.each<GameState>([createGame(1), steer(createGame(1), "up"), over("wall")])(
     "each phase names its keys and the way out",
     (game) => {
       const row = text(drawGame(game), KEYS_ROW);
@@ -198,7 +198,7 @@ describe("Game over", () => {
     );
 
   test("Over screen", () => {
-    const screen = drawGame({ ...over("crashed"), score: 40 });
+    const screen = drawGame({ ...over("wall"), score: 40 });
 
     expect(inPlayfield(screen, "GAME OVER")).toBe(true);
     expect(inPlayfield(screen, "Press Enter to play again or Esc to exit")).toBe(true);
@@ -207,7 +207,7 @@ describe("Game over", () => {
   });
 
   test("the messages are centred in the playfield", () => {
-    const screen = drawGame(over("crashed"));
+    const screen = drawGame(over("wall"));
     const row = text(screen, MESSAGE_ROW);
     const start = row.indexOf(MESSAGES.crashed);
     const end = start + MESSAGES.crashed.length;
@@ -215,9 +215,15 @@ describe("Game over", () => {
     expect(Math.abs(start - FIELD_LEFT - (FIELD_LEFT + WIDTH - end))).toBeLessThanOrEqual(1);
   });
 
+  test("both kinds of crash show GAME OVER", () => {
+    (["wall", "self"] as const).forEach((reason) => {
+      expect(inPlayfield(drawGame(over(reason)), "GAME OVER")).toBe(true);
+    });
+  });
+
   test("the board stays under the message", () => {
     const game = createGame(1);
-    const screen = drawGame(over("crashed", game));
+    const screen = drawGame(over("wall", game));
 
     expect(cellChar(screen, game.worm[0])).toBe(HEAD);
   });

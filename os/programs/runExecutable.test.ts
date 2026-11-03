@@ -8,8 +8,8 @@ import { print } from "./output";
 import type {
   CommandProgramme,
   FullscreenProgramme,
+  LaunchContext,
   ProgrammeArgs,
-  ProgrammeContext,
   Registry,
   Running,
 } from "./types";
@@ -38,7 +38,7 @@ const args = (...switches: string[]): ProgrammeArgs => ({
   switches,
 });
 
-const context = (cwd = "C:\\"): ProgrammeContext => ({
+const context = (cwd = "C:\\"): LaunchContext => ({
   disk: disk(cwd),
   clock: createClock(0),
   now: 0,
@@ -104,6 +104,35 @@ describe("Behaviour belongs to the file", () => {
   });
 });
 
+const WITH_FILES = expect.objectContaining({ write: expect.any(Function) });
+
+const filesGiven = (token: string, cwd = "C:\\") => {
+  run(token, args(), cwd);
+  const calls = token === "mem" ? vi.mocked(mem.run).mock.lastCall : vi.mocked(game.start).mock.lastCall;
+  if (!calls) throw new Error("not run");
+  return calls[1].files;
+};
+
+describe("Programme file writes are bound to the programme's directory", () => {
+  test("a programme in C:\\DOS cannot write C:\\ODDWARE\\X.TXT", () => {
+    expect(filesGiven("mem").write(disk(), "C:\\ODDWARE\\X.TXT", "x", 0)).toEqual({ ok: false, error: "AccessDenied" });
+  });
+
+  test("C:\\ODDWARE\\GAME.EXE can write C:\\ODDWARE\\X.TXT and C:\\X.TXT", () => {
+    const files = filesGiven("game", "C:\\ODDWARE");
+
+    expect(files.write(disk(), "C:\\ODDWARE\\X.TXT", "x", 0).ok).toBe(true);
+    expect(files.write(disk(), "C:\\X.TXT", "x", 0).ok).toBe(true);
+    expect(files.write(disk(), "C:\\DOS\\X.TXT", "x", 0)).toEqual({ ok: false, error: "AccessDenied" });
+  });
+
+  test("the binding follows the file, however it was named", () => {
+    const files = filesGiven("\\oddware\\game");
+
+    expect(files.write(disk(), "C:\\ODDWARE\\X.TXT", "x", 0).ok).toBe(true);
+  });
+});
+
 describe("Command programmes", () => {
   test("receive their arguments and context", () => {
     const given = args("/C");
@@ -111,7 +140,7 @@ describe("Command programmes", () => {
 
     runExecutable("mem", given, given_context, registry);
 
-    expect(mem.run).toHaveBeenLastCalledWith(given, given_context);
+    expect(mem.run).toHaveBeenLastCalledWith(given, { ...given_context, files: WITH_FILES });
   });
 
   test("print the help text for /? without running", () => {
@@ -128,7 +157,7 @@ describe("Fullscreen programmes", () => {
       type: "launch",
       running,
     });
-    expect(game.start).toHaveBeenLastCalledWith(args("/X"), context("C:\\ODDWARE"));
+    expect(game.start).toHaveBeenLastCalledWith(args("/X"), { ...context("C:\\ODDWARE"), files: WITH_FILES });
   });
 
   test("a programme that fails to start returns to the prompt", () => {

@@ -84,6 +84,6 @@ export const drawGame = (game: GameState): Screen => {
 
   if (game.phase !== "over") return screen;
 
-  screen = paint(screen, "white", [centred(MESSAGE_ROW, MESSAGES[game.reason])]);
+  screen = paint(screen, "white", [centred(MESSAGE_ROW, game.reason === "full" ? MESSAGES.full : MESSAGES.crashed)]);
   return paint(screen, "light-grey", [centred(MESSAGE_ROW + 2, MESSAGES.restart)]);
 };

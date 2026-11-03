@@ -1,19 +1,25 @@
 import { describe, expect, test } from "vitest";
 
-import { createDisk } from "../fs/disk";
+import { createDisk, type Disk } from "../fs/disk";
+import { ARCHIVE, directory, opaqueFile, textFile } from "../fs/entries";
+import { readFile } from "../fs/operations";
+import type { Entry } from "../fs/types";
 import { createClock } from "../shell/clock";
 import type { Screen } from "../terminal/screen";
+import { programmeFiles } from "./files";
 import type { Exited, ProgrammeEvent, ProgrammeKey, Running } from "./types";
 import { HORIZONTAL_TICK_MS, VERTICAL_TICK_MS, WORM } from "./worm";
 import { createGame } from "./wormGame";
+import { LOG_PATH } from "./wormLog";
 import { drawGame, KEYS_ROW, MESSAGES } from "./wormScreen";
 
 const context = (now: number) => ({
-  disk: createDisk(),
+  disk: { ...createDisk(), cwd: "C:\\ODDWARE" },
   clock: createClock(0),
   now,
   history: [],
   commands: [],
+  files: programmeFiles("C:\\ODDWARE", createClock(0)),
 });
 
 const launch = (now = 1) => WORM.start({ tail: "", params: [], switches: [] }, context(now));
@@ -187,19 +193,143 @@ describe("Other keys", () => {
   });
 });
 
+const exitOf = (state: Running, now = 0): Exited => {
+  const exited = state.step({ type: "key", key: { type: "escape" }, now });
+  if (exited.type !== "exit") throw new Error("the game did not exit");
+  return exited;
+};
+
+const logIn = (exited: Exited) => {
+  if (!exited.disk) return undefined;
+  const read = readFile(exited.disk.filesystem, "C:\\", LOG_PATH);
+  return read.ok && read.value.kind === "text" ? read.value.text : undefined;
+};
+
+const entries = (log: string | undefined) => (log ?? "").split("\r\n").filter((line) => line.startsWith("SESSION "));
+
+const withoutLog = (disk: Disk) => ({
+  ...disk,
+  filesystem: {
+    root: { ...disk.filesystem.root, entries: disk.filesystem.root.entries.filter(({ name }) => name !== "WORM.LOG") },
+  },
+});
+
 describe("Leaving with Escape", () => {
   test.each([
     ["ready", launch],
     ["playing", playing],
     ["over", finished],
   ] as const)("From each state: %s", (_, state) => {
-    const exited = state().step(press("escape"));
+    expect(exitOf(state()).type).toBe("exit");
+  });
+
+  test.each([
+    ["playing", playing],
+    ["over", finished],
+  ] as const)("Nothing left behind: %s", (_, state) => {
+    const exited = exitOf(state());
+    const before = context(0).disk;
+
+    expect(exited.disk?.cwd).toBe(before.cwd);
+    expect(exited.disk && withoutLog(exited.disk)).toEqual(before);
+  });
+
+  test("Escape from ready leaves the disk value untouched", () => {
+    const exited = exitOf(launch());
 
     expect(exited).toEqual<Exited>({ type: "exit" });
     expect(exited).not.toHaveProperty("disk");
   });
+});
 
-  test("Escape mid-game, after some moves", () => {
-    expect(run(playing(), ...ticks(3)).step(press("escape"))).toEqual({ type: "exit" });
+describe("Sessions", () => {
+  test("A game that ends", () => {
+    const over = finished();
+    const log = logIn(exitOf(over));
+    const header = text(over.screen)[0];
+
+    expect(entries(log)).toEqual(["SESSION 001"]);
+    expect(log).toContain("ENDED      STRUCK WALL");
+    expect(log).toContain(`LENGTH ${/LENGTH: (\d+)/.exec(header)?.[1]}`);
+    expect(log).toContain(`SCORE ${/SCORE: (\d+)/.exec(header)?.[1]}`);
+  });
+
+  test("Quitting mid-game", () => {
+    const log = logIn(exitOf(run(playing(), ...ticks(3))));
+
+    expect(entries(log)).toEqual(["SESSION 001"]);
+    expect(log).toContain("ENDED      STOPPED BY OPERATOR");
+  });
+
+  test("Several games in one run", () => {
+    const again = (state: Running) => {
+      let next = step(step(state, press("enter")), press("right"));
+      for (let count = 0; count < 100 && next.tickMs !== undefined; count += 1) next = step(next, TICK);
+      return next;
+    };
+    const log = logIn(exitOf(again(again(finished()))));
+
+    expect(entries(log)).toEqual(["SESSION 001", "SESSION 002", "SESSION 003"]);
+  });
+
+  test("No game played", () => {
+    expect(logIn(exitOf(launch()))).toBeUndefined();
+  });
+
+  test("Restart without playing", () => {
+    expect(entries(logIn(exitOf(step(finished(), press("enter")))))).toEqual(["SESSION 001"]);
+  });
+
+  test("the session lasts from the starting key to the end", () => {
+    const at = (now: number): ProgrammeEvent => ({ type: "tick", now });
+    let state = step(launch(), { type: "key", key: { type: "right" }, now: 10_000 });
+    state = run(state, at(20_000), at(40_000));
+
+    expect(logIn(exitOf(state, 93_999))).toContain("TIME 1:23");
+  });
+
+  test("food eaten is the growth of the worm", () => {
+    const seed = Array.from({ length: 5_000 }, (_, now) => now).find((now) => {
+      const { food } = createGame(now);
+      return food !== undefined && food.y === 10 && food.x > 40 && food.x < 70;
+    });
+    if (seed === undefined) throw new Error("no seed puts food ahead of the worm");
+
+    let state = step(launch(seed), press("right"));
+    for (let count = 0; count < 35 && !text(state.screen)[0].includes("LENGTH: 4"); count += 1) state = step(state, TICK);
+
+    const log = logIn(exitOf(state));
+    expect(log).toContain("SCORE 10   LENGTH 4   FOOD 1");
+  });
+});
+
+describe("Log write failures", () => {
+  const WHEN = new Date(Date.UTC(1993, 8, 20, 16, 48));
+
+  const launchOn = (entry: Entry) =>
+    WORM.start(
+      { tail: "", params: [], switches: [] },
+      {
+        ...context(1),
+        disk: { filesystem: { root: { ...createDisk().filesystem.root, entries: [...createDisk().filesystem.root.entries, entry] } }, cwd: "C:\\ODDWARE" },
+      },
+    );
+
+  const playedOn = (entry: Entry) => {
+    let state = step(launchOn(entry), press("right"));
+    for (let count = 0; count < 100 && state.tickMs !== undefined; count += 1) state = step(state, TICK);
+    return state;
+  };
+
+  test.each([
+    ["Name taken by a directory", directory("WORM.LOG", WHEN)],
+    ["Read-only file", textFile("WORM.LOG", WHEN, "OLD\r\n", { ...ARCHIVE, readOnly: true })],
+    ["Not a text file", opaqueFile("WORM.LOG", WHEN, 500)],
+  ] as const)("%s", (_, entry) => {
+    const over = playedOn(entry);
+
+    expect(over.type).toBe("running");
+    expect(text(over.screen).join("\n")).toContain(MESSAGES.crashed);
+    expect(exitOf(over)).toEqual<Exited>({ type: "exit" });
   });
 });

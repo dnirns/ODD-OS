@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { createDisk } from "../fs/disk";
+import { readFile } from "../fs/operations";
 import { HORIZONTAL_TICK_MS, VERTICAL_TICK_MS } from "../programs/worm";
 import { createScreen, moveCursor, type Screen, writeText } from "../terminal/screen";
 import { createShell, reduceShell, type ShellState, tickInterval, tickShell } from "./shell";
@@ -159,8 +160,13 @@ describe("Leaving with Escape", () => {
   test.each(states)("Nothing left behind: %s", (_, state) => {
     const before = shellIn("C:\\ODDWARE");
     const shell = press(state(), escape);
+    const others = (disk: ShellState["disk"]) => ({
+      ...disk,
+      filesystem: { root: { ...disk.filesystem.root, entries: disk.filesystem.root.entries.filter(({ name }) => name !== "WORM.LOG") } },
+    });
 
-    expect(shell.disk).toEqual(before.disk);
+    expect(shell.disk.cwd).toBe("C:\\ODDWARE");
+    expect(others(shell.disk)).toEqual(before.disk);
     expect(shell.history.entries).toEqual(["worm"]);
   });
 
@@ -188,5 +194,85 @@ describe("Leaving with Escape", () => {
     expect(allRows(again.screen)[0]).toContain("SCORE: 0");
     expect(allRows(again.screen)[0]).toContain("LENGTH: 3");
     expect(allRows(again.screen)[24]).toContain("Press an arrow key to start");
+  });
+});
+
+describe("WORM.LOG through the shell", () => {
+  const playOnce = (state: ShellState) => press(tick(press(run(state, "worm"), key("right")), 60), escape);
+
+  const sessions = (count: number, state = shellIn("C:\\ODDWARE")) =>
+    Array.from({ length: count }).reduce<ShellState>((current) => playOnce(current), state);
+
+  const logText = (state: ShellState) => {
+    const read = readFile(state.disk.filesystem, "C:\\", "C:\\WORM.LOG");
+    return read.ok && read.value.kind === "text" ? read.value.text : undefined;
+  };
+
+  const screenText = (state: ShellState) => allRows(state.screen).join("\n");
+
+  const logSize = (state: ShellState) => {
+    const row = allRows(run(state, "dir \\worm.log").screen).find((text) => text.startsWith("WORM     LOG"));
+    return Number(row?.slice(12, 26).replace(/[ ,]/g, ""));
+  };
+
+  test("Listed by DIR", () => {
+    const rows = allRows(run(sessions(1), "dir \\").screen);
+    const readme = rows.findIndex((text) => text.startsWith("README   TXT"));
+
+    expect(rows[readme + 1]).toMatch(/^WORM {5}LOG +\d+ 11-02-93 {3}3:45p$/);
+    expect(rows.some((text) => /^ +5 file\(s\)/.test(text))).toBe(true);
+  });
+
+  test("Shown by TYPE", () => {
+    const text = screenText(run(sessions(1), "type \\worm.log"));
+
+    expect(text).toContain("WORM.EXE SESSION LOG");
+    expect(text).toContain("SESSION 001");
+    expect(text).toContain("ENDED      STRUCK WALL");
+  });
+
+  test("No game played leaves no log", () => {
+    const shell = press(run(shellIn("C:\\ODDWARE"), "worm"), escape);
+
+    expect(logText(shell)).toBeUndefined();
+    expect(screenText(run(shell, "dir \\worm.log"))).toContain("File not found");
+  });
+
+  test("Second session in a later run, and a growing file", () => {
+    const once = sessions(1);
+    const twice = playOnce(once);
+
+    expect(logText(twice)?.startsWith(logText(once) ?? "?")).toBe(true);
+    expect(logText(twice)).toContain("SESSION 002");
+    expect(logSize(twice)).toBeGreaterThan(logSize(once));
+  });
+
+  test("Several games in one run", () => {
+    const again = (state: ShellState) => tick(press(state, enter, key("right")), 60);
+    const shell = press(again(again(tick(press(run(shellIn("C:\\ODDWARE"), "worm"), key("right")), 60))), escape);
+
+    expect(logText(shell)?.match(/^SESSION \d+$/gm)).toEqual(["SESSION 001", "SESSION 002", "SESSION 003"]);
+  });
+
+  test("the seventh session contradicts the game, which stays true", () => {
+    const six = sessions(6);
+    const over = tick(press(run(six, "worm"), key("right")), 60);
+    const header = allRows(over.screen)[0];
+    const length = Number(/LENGTH: (\d+)/.exec(header)?.[1]);
+    const shell = press(over, escape);
+    const seventh = logText(shell)?.split("SESSION 007")[1] ?? "";
+
+    expect(length).toBe(3 + Number(/SCORE: (\d+)/.exec(header)?.[1]) / 10);
+    expect(seventh).toContain(`LENGTH ${length + 1}`);
+    expect(seventh).toContain("NOTE       DISPLAYED FIGURES WERE NOT ACCURATE.");
+  });
+
+  test("ordinary commands behave as before", () => {
+    const shell = sessions(2);
+
+    expect(screenText(run(shell, "ver"))).toContain("ODD/OS Version 3.14");
+    expect(run(shell, "cd \\dos").disk.cwd).toBe("C:\\DOS");
+    expect(screenText(run(shell, "dir \\dos"))).toContain("MEM      EXE");
+    expect(shell.disk.cwd).toBe("C:\\ODDWARE");
   });
 });

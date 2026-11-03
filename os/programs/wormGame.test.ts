@@ -207,7 +207,7 @@ describe("Steering", () => {
   });
 
   test("steering a finished game changes nothing", () => {
-    const over: GameState = { ...right, phase: "over", reason: "crashed" };
+    const over: GameState = { ...right, phase: "over", reason: "wall" };
 
     (["up", "down", "left", "right"] as const).forEach((direction) => {
       expect(steer(over, direction)).toBe(over);
@@ -239,7 +239,7 @@ describe("Movement", () => {
 
   test("Ticks while not playing", () => {
     const ready = createGame(3);
-    const over: GameState = { ...ready, phase: "over", reason: "crashed" };
+    const over: GameState = { ...ready, phase: "over", reason: "wall" };
 
     expect(advance(ready)).toBe(ready);
     expect(advance(over)).toBe(over);
@@ -311,7 +311,7 @@ describe("Collisions", () => {
     const game = playing([head, behind], direction);
     const over = advance(game);
 
-    expect(over).toMatchObject({ phase: "over", reason: "crashed" });
+    expect(over).toMatchObject({ phase: "over", reason: "wall" });
     expect(over.worm).toEqual(game.worm);
     expect(over.score).toBe(0);
   });
@@ -323,8 +323,18 @@ describe("Collisions", () => {
     );
     const over = advance(steer(game, "down"));
 
-    expect(over).toMatchObject({ phase: "over", reason: "crashed" });
+    expect(over).toMatchObject({ phase: "over", reason: "self" });
     expect(over.worm).toEqual(game.worm);
+  });
+
+  test("a wall and the worm itself are told apart", () => {
+    const wall = advance(playing([{ x: WIDTH - 1, y: 5 }, { x: WIDTH - 2, y: 5 }], "right"));
+    const self = advance(
+      steer(playing([{ x: 5, y: 5 }, { x: 6, y: 5 }, { x: 6, y: 6 }, { x: 5, y: 6 }, { x: 4, y: 6 }], "left"), "down"),
+    );
+
+    expect(wall).toMatchObject({ reason: "wall" });
+    expect(self).toMatchObject({ reason: "self" });
   });
 
   test("Following the tail", () => {
@@ -370,7 +380,7 @@ describe("Game over and restart", () => {
   const crashed = (seed: number) => times(started(seed), 60);
 
   test("hitting the wall from the opening position ends the game", () => {
-    expect(crashed(1)).toMatchObject({ phase: "over", reason: "crashed" });
+    expect(crashed(1)).toMatchObject({ phase: "over", reason: "wall" });
   });
 
   test("Restart", () => {

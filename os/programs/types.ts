@@ -1,4 +1,5 @@
 import type { Disk } from "../fs/disk";
+import type { Result } from "../fs/types";
 import type { Clock } from "../shell/clock";
 import type { ShellKey } from "../shell/shellKeys";
 import type { Screen } from "../terminal/screen";
@@ -19,13 +20,24 @@ export type CommandInfo = {
   readonly help: readonly string[];
 };
 
-// Everything a programme may know. All of it is a read-only value.
-export type ProgrammeContext = {
+// What the shell knows when it runs a programme. All of it is a read-only value.
+export type LaunchContext = {
   readonly disk: Disk;
   readonly clock: Clock;
   readonly now: number;
   readonly history: readonly string[];
   readonly commands: readonly CommandInfo[];
+};
+
+// The only way a programme writes. It takes a disk and returns a new one;
+// the programme returns that disk on exit.
+export type ProgrammeFiles = {
+  readonly write: (disk: Disk, path: string, text: string, now: number) => Result<Disk>;
+};
+
+// Everything a programme may know and use.
+export type ProgrammeContext = LaunchContext & {
+  readonly files: ProgrammeFiles;
 };
 
 export type NestResult = {
