@@ -54,13 +54,20 @@ const isSymbol = (key: string) => /^[!-/:-@[-`{-~]$/.test(key);
 const toChar = (key: string, accepts: (key: string) => boolean) =>
   accepts(key) ? ({ type: "char", char: key } as const) : undefined;
 
-export const toShellKey = ({
-  key,
-  ctrlKey,
-  metaKey,
-  altKey,
-  altGraph,
-}: KeyInput): ShellKey | undefined => {
+const END_OF_FILE_KEY = { type: "char", char: "\x1A" } as const;
+
+const isEndOfFileKey = ({ key, ctrlKey, metaKey, altKey, altGraph }: KeyInput) =>
+  !metaKey && !altKey && !altGraph && (ctrlKey ? key.toLowerCase() === "z" : key === "F6");
+
+// Ctrl+Z and F6 type the end-of-file character only where it is accepted,
+// while `COPY CON` reads a file. Elsewhere the browser keeps them.
+export const toShellKey = (
+  input: KeyInput,
+  acceptsEndOfFile = false,
+): ShellKey | undefined => {
+  const { key, ctrlKey, metaKey, altKey, altGraph } = input;
+
+  if (acceptsEndOfFile && isEndOfFileKey(input)) return END_OF_FILE_KEY;
   if (altGraph) return toChar(key, isPrintable);
   if (metaKey && !ctrlKey && !altKey) return COMMAND_KEYS[key];
   if (ctrlKey || metaKey) return undefined;

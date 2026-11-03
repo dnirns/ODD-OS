@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 
-import { fileChanges } from "../fs/changes";
+import { diskChanges } from "../fs/changes";
 import { createDisk } from "../fs/disk";
-import { ARCHIVE, textFile } from "../fs/entries";
-import { readFile, writeFile } from "../fs/operations";
+import { ARCHIVE, NO_ATTRIBUTES, textFile } from "../fs/entries";
+import { createDirectory, deleteFile, readFile, writeFile } from "../fs/operations";
 import { createFilesystem } from "../fs/seed";
 import { FORMAT, readRecord, startingDisk, toRecord } from "./record";
 
@@ -15,20 +15,30 @@ const withLog = () => {
   return written.value;
 };
 
-const record = () => toRecord(fileChanges(createFilesystem(), withLog()));
+const record = () => toRecord(diskChanges(createFilesystem(), withLog()));
 
-const recordWith = (file: Record<string, unknown>, directory: unknown = []) => ({
+const recordWith = (entry: Record<string, unknown>, directory: unknown = []) => ({
   format: FORMAT,
-  files: [{ directory, file: { ...textFile("WORM.LOG", NOW, "x", ARCHIVE), ...file } }],
+  removed: [],
+  entries: [{ directory, entry: { ...textFile("WORM.LOG", NOW, "x", ARCHIVE), ...entry } }],
 });
+
+const GAMES = { kind: "directory", name: "GAMES", modified: NOW, attributes: NO_ATTRIBUTES };
 
 describe("readRecord", () => {
   test("a record built by toRecord reads back as the same changes", () => {
-    expect(readRecord(record())).toEqual({ kind: "changes", changes: record().files });
+    const { removed, entries } = record();
+    expect(readRecord(record())).toEqual({ kind: "changes", changes: { removed, entries } });
   });
 
   test("an empty record has no changes", () => {
-    expect(readRecord({ format: 1, files: [] })).toEqual({ kind: "changes", changes: [] });
+    expect(readRecord({ format: 2, removed: [], entries: [] })).toEqual({ kind: "changes", changes: { removed: [], entries: [] } });
+  });
+
+  test("directories and removals read back", () => {
+    const value = { format: 2, removed: [["README.TXT"], ["DOS", "MEM.EXE"]], entries: [{ directory: [], entry: GAMES }] };
+
+    expect(readRecord(value)).toEqual({ kind: "changes", changes: { removed: value.removed, entries: value.entries } });
   });
 
   test.each([
@@ -40,6 +50,13 @@ describe("readRecord", () => {
     ["format 0", { format: 0, files: [] }],
     ["files not an array", { format: 1, files: {} }],
     ["a file that is not an object", { format: 1, files: [1] }],
+    ["format 2 without removals", { format: 2, entries: [] }],
+    ["format 2 without entries", { format: 2, removed: [] }],
+    ["an entry that is not an object", { format: 2, removed: [], entries: [1] }],
+    ["an empty removal path", { format: 2, removed: [[]], entries: [] }],
+    ["an invalid removal name", { format: 2, removed: [["READ ME"]], entries: [] }],
+    ["a removal that is not a list", { format: 2, removed: ["README.TXT"], entries: [] }],
+    ["a format 1 record holding a directory", { format: 1, files: [{ directory: [], file: GAMES }] }],
   ])("%s is invalid", (_, value) => {
     expect(readRecord(value)).toEqual({ kind: "invalid" });
   });
@@ -59,7 +76,10 @@ describe("readRecord", () => {
     ["text that is not a string", recordWith({ content: { kind: "text", text: 4 } })],
     ["a negative size", recordWith({ content: { kind: "opaque", size: -1 } })],
     ["a fractional size", recordWith({ content: { kind: "opaque", size: 1.5 } })],
-    ["a directory entry", recordWith({ kind: "directory" })],
+    ["a directory with a bad name", recordWith({ ...GAMES, name: "GA ME" })],
+    ["a directory with a bad date", recordWith({ ...GAMES, modified: "today" })],
+    ["a directory with bad attributes", recordWith({ ...GAMES, attributes: {} })],
+    ["an entry of another kind", recordWith({ kind: "link" })],
   ])("%s makes the record invalid", (_, value) => {
     expect(readRecord(value)).toEqual({ kind: "invalid" });
   });
@@ -68,8 +88,24 @@ describe("readRecord", () => {
     expect(readRecord(recordWith({ content: { kind: "opaque", size: 12 } })).kind).toBe("changes");
   });
 
+  test("a directory entry is accepted", () => {
+    expect(readRecord(recordWith(GAMES)).kind).toBe("changes");
+  });
+
   test("a newer format is recognised", () => {
-    expect(readRecord({ format: 2, files: "anything" })).toEqual({ kind: "newer" });
+    expect(readRecord({ format: 3, files: "anything" })).toEqual({ kind: "newer" });
+  });
+
+  test("a format 1 record from Slice 11 reads as files with no removals", () => {
+    const stored = {
+      format: 1,
+      files: [{ directory: [], file: textFile("WORM.LOG", NOW, "WORM.EXE SESSION LOG\r\n", ARCHIVE) }],
+    };
+
+    expect(readRecord(stored)).toEqual({
+      kind: "changes",
+      changes: { removed: [], entries: [{ directory: [], entry: stored.files[0].file }] },
+    });
   });
 
   test("restored values are copies, not the stored objects", () => {
@@ -77,7 +113,7 @@ describe("readRecord", () => {
     const read = readRecord(stored);
 
     if (read.kind !== "changes") throw new Error(read.kind);
-    expect(read.changes[0].file.modified).not.toBe(stored.files[0].file.modified);
+    expect(read.changes.entries[0].entry.modified).not.toBe(stored.entries[0].entry.modified);
   });
 });
 
@@ -88,7 +124,7 @@ describe("startingDisk", () => {
     const written = writeFile(createFilesystem(), "C:\\", "C:\\ODDWARE\\WORM.HI", "120\r\n", NOW);
     if (!written.ok) throw new Error(written.error);
 
-    const stored = structuredClone(toRecord(fileChanges(createFilesystem(), written.value)));
+    const stored = structuredClone(toRecord(diskChanges(createFilesystem(), written.value)));
     const { disk } = startingDisk({ kind: "read", value: stored });
     const read = readFile(disk.filesystem, "C:\\", "C:\\ODDWARE\\WORM.HI");
     const oddware = disk.filesystem.root.entries.find(({ name }) => name === "ODDWARE");
@@ -106,11 +142,28 @@ describe("startingDisk", () => {
   });
 
   test.each([
-    ["a newer record", { kind: "read", value: { format: 2 } }],
+    ["a newer record", { kind: "read", value: { format: 3 } }],
     ["unavailable storage", { kind: "unavailable" }],
     ["a read that timed out", { kind: "timeout" }],
   ] as const)("%s gives the shipped disk, not saving", (_, read) => {
     expect(startingDisk(read)).toEqual({ disk: shipped, saving: false });
+  });
+
+  test("Returning visitor: a format 1 record restores its files", () => {
+    const stored = { format: 1, files: [{ directory: [], file: textFile("WORM.LOG", NOW, "WORM.EXE SESSION LOG\r\n", ARCHIVE) }] };
+
+    expect(startingDisk({ kind: "read", value: stored })).toEqual({ disk: { filesystem: withLog(), cwd: "C:\\" }, saving: true });
+  });
+
+  test("a deleted file and a new directory survive storage", () => {
+    const made = createDirectory(createFilesystem(), "C:\\", "GAMES", NOW);
+    if (!made.ok) throw new Error(made.error);
+    const deleted = deleteFile(made.value, "C:\\", "README.TXT");
+    if (!deleted.ok) throw new Error(deleted.error);
+
+    const stored = structuredClone(toRecord(diskChanges(createFilesystem(), deleted.value)));
+
+    expect(startingDisk({ kind: "read", value: stored }).disk.filesystem).toEqual(deleted.value);
   });
 
   test("valid changes are laid over the shipped disk, saving", () => {

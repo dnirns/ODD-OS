@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { fileChanges } from "../os/fs/changes";
+import { diskChanges } from "../os/fs/changes";
 import { createFilesystem } from "../os/fs/seed";
 import type { Filesystem } from "../os/fs/types";
 import { readKept, saveKept } from "../os/storage/diskStore";
@@ -16,7 +16,7 @@ import Terminal from "./Terminal";
 const READ_DEADLINE_MS = 3000;
 
 const saveFiles = (filesystem: Filesystem) =>
-  saveKept(toRecord(fileChanges(createFilesystem(), filesystem)));
+  saveKept(toRecord(diskChanges(createFilesystem(), filesystem)));
 
 const Computer = () => {
   const [bootScreen, setBootScreen] = useState<Screen>();

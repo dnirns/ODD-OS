@@ -102,3 +102,23 @@ export const matchesPattern = ({ base, extension }: Pattern, name: string) => {
     matchesField(extension, nameExtension, MAX_EXTENSION_LENGTH)
   );
 };
+
+const mapField = (pattern: string, field: string, width: number) => {
+  const padded = field.padEnd(width);
+
+  return Array.from(pattern)
+    .map((char, index) => (char === "?" ? padded[index] : char))
+    .join("")
+    .trimEnd();
+};
+
+// The name a wildcard target gives a file, as RENAME and COPY build it: each
+// `?` takes the old name's character in that position, and every other
+// character is kept.
+export const mapName = ({ base, extension }: Pattern, name: string) => {
+  const [nameBase, nameExtension = ""] = name.toUpperCase().split(".");
+  const newBase = mapField(base, nameBase, MAX_BASE_LENGTH);
+  const newExtension = mapField(extension, nameExtension, MAX_EXTENSION_LENGTH);
+
+  return newExtension === "" ? newBase : `${newBase}.${newExtension}`;
+};

@@ -1,6 +1,6 @@
 import { ARCHIVE, fileSize, NO_ATTRIBUTES } from "./entries";
-import { hasWildcard, matchesPattern, parsePattern } from "./names";
-import { locate, resolvePath } from "./path";
+import { hasWildcard, matchesPattern, normaliseName, parsePattern } from "./names";
+import { formatPath, locate, resolvePath } from "./path";
 import {
   type Attributes,
   type DirectoryEntry,
@@ -212,6 +212,150 @@ const written = (
   attributes: { ...attributes, archive: true },
   content: { kind: "text", text },
 });
+
+// Writes a file with the given content, time and attributes: a copy, which
+// keeps its source's time. A new file goes at the end of its directory and an
+// existing one is replaced in place.
+export const writeEntry = (
+  fs: Filesystem,
+  cwd: string,
+  path: string,
+  content: FileContent,
+  modified: Date,
+  attributes: Attributes,
+): Result<Filesystem> => {
+  const located = locate(fs, cwd, path);
+  const file = (name: string): FileEntry => ({
+    kind: "file",
+    name,
+    modified: new Date(modified.getTime()),
+    attributes,
+    content,
+  });
+
+  switch (located.kind) {
+    case "error":
+      return fail(located.error);
+
+    case "missing":
+      return ok(withEntries(fs, located.parent, (entries) => [...entries, file(located.name)]));
+
+    case "found": {
+      const { entry, names } = located;
+
+      if (entry.kind === "directory") return fail("IsADirectory");
+      if (entry.attributes.readOnly) return fail("AccessDenied");
+
+      return ok(
+        withEntries(fs, names.slice(0, -1), (entries) =>
+          entries.map((existing) => (existing === entry ? file(entry.name) : existing)),
+        ),
+      );
+    }
+  }
+};
+
+export const createDirectory = (
+  fs: Filesystem,
+  cwd: string,
+  path: string,
+  now: Date,
+): Result<Filesystem> => {
+  const located = locate(fs, cwd, path);
+
+  switch (located.kind) {
+    case "error":
+      return fail(located.error);
+    case "found":
+      return fail("AccessDenied");
+    case "missing":
+      return ok(
+        withEntries(fs, located.parent, (entries) => [
+          ...entries,
+          {
+            kind: "directory",
+            name: located.name,
+            modified: new Date(now.getTime()),
+            attributes: NO_ATTRIBUTES,
+            entries: [],
+          },
+        ]),
+      );
+  }
+};
+
+// Takes an entry out of its parent, leaving the others in order.
+const without = (fs: Filesystem, names: readonly string[], entry: Entry): Filesystem =>
+  withEntries(fs, names.slice(0, -1), (entries) => entries.filter((existing) => existing !== entry));
+
+export const removeDirectory = (fs: Filesystem, cwd: string, path: string): Result<Filesystem> => {
+  const located = locate(fs, cwd, path);
+
+  switch (located.kind) {
+    case "error":
+      return fail(located.error);
+    case "missing":
+      return fail("PathNotFound");
+    case "found": {
+      const { entry, names } = located;
+
+      if (entry.kind === "file") return fail("NotADirectory");
+      if (names.length === 0 || entry.entries.length > 0) return fail("AccessDenied");
+
+      return ok(without(fs, names, entry));
+    }
+  }
+};
+
+export const deleteFile = (fs: Filesystem, cwd: string, path: string): Result<Filesystem> => {
+  const located = locate(fs, cwd, path);
+
+  switch (located.kind) {
+    case "error":
+      return fail(located.error);
+    case "missing":
+      return fail("FileNotFound");
+    case "found": {
+      const { entry, names } = located;
+
+      if (entry.kind === "directory") return fail("IsADirectory");
+      if (entry.attributes.readOnly) return fail("AccessDenied");
+
+      return ok(without(fs, names, entry));
+    }
+  }
+};
+
+// Gives a file a new name in its own directory, keeping its place, contents,
+// time and attributes.
+export const renameFile = (
+  fs: Filesystem,
+  cwd: string,
+  path: string,
+  newName: string,
+): Result<Filesystem> => {
+  const located = locate(fs, cwd, path);
+
+  if (located.kind === "error") return fail(located.error);
+  if (located.kind === "missing") return fail("FileNotFound");
+
+  const { entry, names } = located;
+  if (entry.kind === "directory") return fail("IsADirectory");
+
+  const name = normaliseName(newName);
+  if (!name.ok) return fail(name.error);
+
+  const parent = names.slice(0, -1);
+  const directoryPath = formatPath(parent);
+  const clash = locate(fs, directoryPath, name.value);
+  if (clash.kind === "found" && clash.entry !== entry) return fail("AccessDenied");
+
+  return ok(
+    withEntries(fs, parent, (entries) =>
+      entries.map((existing) => (existing === entry ? { ...entry, name: name.value } : existing)),
+    ),
+  );
+};
 
 export const writeFile = (
   fs: Filesystem,

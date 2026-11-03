@@ -19,12 +19,15 @@ export const HELP: CommandProgramme = {
 
     const [topic] = params;
     if (topic === undefined) {
-      return print(
-        "For more information on a specific command, type HELP command-name",
-        ...commands
-          .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
-          .map(({ name, summary }) => `${name.padEnd(9)}${summary}`),
-      );
+      return {
+        type: "page",
+        lines: [
+          "For more information on a specific command, type HELP command-name",
+          ...commands
+            .toSorted((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+            .map(({ name, summary }) => `${name.padEnd(9)}${summary}`),
+        ],
+      };
     }
 
     const found = commands.find(({ name }) => name === topic.toUpperCase());

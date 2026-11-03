@@ -2,15 +2,18 @@ import { describe, expect, test } from "vitest";
 
 import { type KeyInput, toShellKey } from "./shellKeys";
 
-const press = (key: string, modifiers: Partial<KeyInput> = {}) =>
-  toShellKey({
-    key,
-    ctrlKey: false,
-    metaKey: false,
-    altKey: false,
-    altGraph: false,
-    ...modifiers,
-  });
+const press = (key: string, modifiers: Partial<KeyInput> = {}, acceptsEndOfFile = false) =>
+  toShellKey(
+    {
+      key,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      altGraph: false,
+      ...modifiers,
+    },
+    acceptsEndOfFile,
+  );
 
 describe("toShellKey", () => {
   test.each(["a", "Z", "7", " ", "\\", "~", "/", "'"])(
@@ -104,5 +107,37 @@ describe("keys that must not continue a paused listing", () => {
 describe("keys that continue a paused listing", () => {
   test.each(["Enter", " ", "Escape", "ArrowUp", "ArrowDown", "a", "Tab"])("%j gives a key", (key) => {
     expect(press(key)).toBeDefined();
+  });
+});
+
+describe("the end-of-file key", () => {
+  const END_OF_FILE = { type: "char", char: "\x1A" };
+
+  test.each([
+    ["Ctrl+Z", "z", { ctrlKey: true }],
+    ["Ctrl+Shift+Z", "Z", { ctrlKey: true }],
+    ["F6", "F6", {}],
+  ])("%s types it while a file is read", (_, key, modifiers) => {
+    expect(press(key, modifiers, true)).toEqual(END_OF_FILE);
+  });
+
+  test.each([
+    ["Ctrl+Z", "z", { ctrlKey: true }],
+    ["F6", "F6", {}],
+  ])("%s maps to nothing at the prompt", (_, key, modifiers) => {
+    expect(press(key, modifiers)).toBeUndefined();
+  });
+
+  test.each([
+    ["Cmd+Z", "z", { metaKey: true }],
+    ["Alt+F6", "F6", { altKey: true }],
+    ["Ctrl+Alt+Z", "z", { ctrlKey: true, altKey: true }],
+  ])("%s does not type it", (_, key, modifiers) => {
+    expect(press(key, modifiers, true)).not.toEqual(END_OF_FILE);
+  });
+
+  test("other keys are unchanged while a file is read", () => {
+    expect(press("a", {}, true)).toEqual({ type: "char", char: "a" });
+    expect(press("c", { ctrlKey: true }, true)).toBeUndefined();
   });
 });

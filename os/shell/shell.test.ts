@@ -2,10 +2,14 @@ import { describe, expect, test } from "vitest";
 
 import { COLUMNS, createScreen, moveCursor, ROWS, type Screen, writeText } from "../terminal/screen";
 import { applySteps, createBootScreen, createBootSteps } from "../boot/bootSteps";
-import type { Disk } from "../fs/disk";
+import { createDisk, type Disk } from "../fs/disk";
 import { directory, textFile } from "../fs/entries";
+import { createDirectory } from "../fs/operations";
+import { print } from "../programs/output";
+import type { Answer, QuestionRead } from "./commands";
+import { VERSION } from "../version";
 import { PROMPT } from "./prompt";
-import { createShell, reduceShell, type ShellState } from "./shell";
+import { applyResult, createShell, reduceShell, type ShellState } from "./shell";
 import type { ShellKey } from "./shellKeys";
 
 const key = (type: Exclude<ShellKey["type"], "char">): ShellKey => ({ type });
@@ -424,14 +428,18 @@ describe("running commands", () => {
     expect(rows(shell, 0, 3)).toEqual(["C:\\>cls/?", "Clears the screen.", "", "CLS"]);
   });
 
-  test("HELP lists commands below the command line", () => {
+  test("HELP lists commands below the command line and pauses", () => {
     const shell = run(shellAt(0), "help");
 
     expect(rowText(shell.screen, 1)).toContain("type HELP command-name");
     expect(rowText(shell.screen, 2)).toBe("CD       Displays the name of or changes the current directory.");
     expect(rowText(shell.screen, 4)).toBe("CLS      Clears the screen.");
-    expect(rowText(shell.screen, 14)).toBe("VER      Displays the ODD/OS version.");
-    expect(rows(shell, 15, 16)).toEqual(["", PROMPT]);
+    expect(rowText(shell.screen, 24)).toBe("Press any key to continue . . .");
+    expect(shell.input.type).toBe("pause");
+
+    const rest = press(shell, ...type("x"));
+    expect(rows(rest, ROWS - 3, ROWS - 1)).toEqual(["VER      Displays the ODD/OS version.", "", PROMPT]);
+    expect(rest.input.type).toBe("command");
   });
 
   test("MEM scrolls within the screen from the bottom row", () => {
@@ -828,5 +836,262 @@ describe("Output lines wrap", () => {
     const shell = run(shellAt(0), "ver");
 
     expect(rowText(shell.screen, 2)).toBe("ODD/OS Version 3.14");
+  });
+});
+
+const nextRowOf = ({ screen }: ShellState) => moveCursor(screen, screen.cursor.row + 1, 0);
+
+describe("commands that change the disk", () => {
+  test("a files result replaces the disk and prints its lines", () => {
+    const made = createDirectory(createDisk().filesystem, "C:\\", "GAMES", new Date(NOW));
+    if (!made.ok) throw new Error(made.error);
+    const disk = { filesystem: made.value, cwd: "C:\\" };
+
+    const shell = applyResult(shellAt(0), nextRowOf(shellAt(0)), { type: "files", disk, lines: ["done"] });
+
+    expect(shell.disk).toBe(disk);
+    expect(rows(shell, 1, 3)).toEqual(["done", "", PROMPT]);
+    expect(shell.input.type).toBe("command");
+  });
+});
+
+describe("questions", () => {
+  const yesOrNo: Answer = (text) =>
+    /^[yn]/i.test(text)
+      ? print(`answered ${text[0].toUpperCase()}`)
+      : { type: "question", lines: [], prompt: "Sure (Y/N)?", read: "line", answer: yesOrNo };
+
+  const asking = (read: QuestionRead, answer: Answer, prompt = "Sure (Y/N)?") =>
+    applyResult(run(shellAt(0), "foo"), nextRowOf(run(shellAt(0), "foo")), {
+      type: "question",
+      lines: ["first"],
+      prompt,
+      read,
+      answer,
+    });
+
+  const collected: string[] = [];
+  const collect: Answer = (text) => {
+    collected.push(text);
+    return print("collected");
+  };
+
+  test("a line question shows its lines and prompt, and reads after it", () => {
+    const shell = press(asking("line", yesOrNo), ...type("x"));
+
+    expect(rowText(shell.screen, shell.screen.cursor.row)).toBe("Sure (Y/N)?x");
+    expect(rowText(shell.screen, shell.screen.cursor.row - 1)).toBe("first");
+  });
+
+  test("a rejected answer asks again", () => {
+    const shell = run(asking("line", yesOrNo), "maybe");
+
+    expect(shell.input.type).toBe("question");
+    expect(rowText(shell.screen, shell.screen.cursor.row)).toBe("Sure (Y/N)?");
+  });
+
+  test("an accepted answer carries on and returns to the prompt", () => {
+    const shell = run(asking("line", yesOrNo), "maybe", "yes");
+    const row = shell.screen.cursor.row;
+
+    expect(rows(shell, row - 2, row)).toEqual(["answered Y", "", PROMPT]);
+    expect(shell.input.type).toBe("command");
+  });
+
+  test("a file question collects lines until one holding ^Z", () => {
+    collected.length = 0;
+    const shell = run(asking("file", collect, ""), "hello", "world", "last\x1Aignored");
+
+    expect(collected).toEqual(["hello\r\nworld\r\nlast"]);
+    expect(shell.input.type).toBe("command");
+  });
+
+  test("file lines start at column 0 with no prompt", () => {
+    const shell = run(asking("file", collect, ""), "hello");
+
+    expect(cursorAt(shell)).toEqual([shell.screen.cursor.row, 0]);
+    expect(rowText(shell.screen, shell.screen.cursor.row - 1)).toBe("hello");
+  });
+
+  test("^Z alone ends the file after the finished lines", () => {
+    collected.length = 0;
+    run(asking("file", collect, ""), "hello", "\x1A");
+
+    expect(collected).toEqual(["hello\r\n"]);
+  });
+
+  test.each([["up", up], ["down", down], ["pageUp", key("pageUp")], ["pageDown", key("pageDown")]])(
+    "%s does nothing while answering",
+    (_, item) => {
+      for (const read of ["line", "file"] as const) {
+        expect(press(asking(read, collect, ""), ...type("1"), item).line).toBe("1");
+      }
+    },
+  );
+
+  test("answers stay out of the history", () => {
+    const shell = press(run(asking("line", yesOrNo), "yes"), up);
+
+    expect(shell.line).toBe("foo");
+  });
+
+  test("Esc clears only the line", () => {
+    const shell = press(asking("file", collect, ""), ...type("abc"), escape);
+
+    expect(shell.line).toBe("");
+    expect(shell.input.type).toBe("question");
+  });
+
+  test("^Z shows as two cells and edits as one character", () => {
+    const eof: ShellKey = { type: "char", char: "\x1A" };
+    const shell = press(asking("file", collect, ""), ...type("ab"), eof);
+    const row = shell.screen.cursor.row;
+
+    expect(rowText(shell.screen, row)).toBe("ab^Z");
+    expect(cursorAt(shell)).toEqual([row, 4]);
+    expect(rowText(press(shell, backspace).screen, row)).toBe("ab");
+    expect(cursorAt(press(shell, left))).toEqual([row, 2]);
+  });
+
+  test("^Z and Enter show ^Z and move to the next row", () => {
+    const shell = press(asking("file", collect, ""), { type: "char", char: "\x1A" }, enter);
+    const row = shell.screen.cursor.row;
+
+    expect(rows(shell, row - 3, row)).toEqual(["^Z", "collected", "", PROMPT]);
+  });
+
+  test("the date prompt still asks as before", () => {
+    expect(run(asking("line", yesOrNo), "y", "date").input.type).toBe("date");
+  });
+});
+
+describe("ECHO", () => {
+  const lastRows = (shell: ShellState, count: number) => {
+    const row = shell.screen.cursor.row;
+    return rows(shell, row - count + 1, row);
+  };
+
+  test("prints a message exactly as typed", () => {
+    expect(lastRows(run(shellAt(0), "echo Hello,  World"), 3)).toEqual(["Hello,  World", "", PROMPT]);
+  });
+
+  test("ECHO. prints an empty row", () => {
+    expect(rows(run(shellAt(0), "echo."), 1, 3)).toEqual(["", "", PROMPT]);
+  });
+
+  test("a switch is text", () => {
+    expect(rowText(run(shellAt(0), "echo /x").screen, 1)).toBe("/x");
+  });
+
+  test("ECHO /? shows its help", () => {
+    expect(rowText(run(shellAt(0), "echo /?").screen, 1)).toBe(
+      "Displays messages, or turns command-echoing on or off.",
+    );
+  });
+
+  test("shows the setting", () => {
+    expect(rowText(run(shellAt(0), "echo").screen, 1)).toBe("ECHO is on");
+  });
+
+  test("ECHO OFF hides the prompt, and ECHO shows it is off", () => {
+    const off = run(shellAt(0), "eCHo oFF");
+
+    expect(rows(off, 1, 2)).toEqual(["", ""]);
+    expect(cursorAt(off)).toEqual([2, 0]);
+    expect(rowText(run(off, "echo").screen, 3)).toBe("ECHO is off");
+  });
+
+  test("ECHO ON shows the prompt again", () => {
+    const shell = run(shellAt(0), "echo off", "echo on");
+
+    expect(rowText(shell.screen, shell.screen.cursor.row)).toBe(PROMPT);
+  });
+
+  test("Echo off: typing starts at column 0 and Home goes there", () => {
+    const shell = press(run(shellAt(0), "echo off"), ...type("ver"));
+    const row = shell.screen.cursor.row;
+
+    expect(rowText(shell.screen, row)).toBe("ver");
+    expect(cursorAt(press(shell, home))).toEqual([row, 0]);
+  });
+
+  test("output behaves as before while echo is off", () => {
+    const shell = run(shellAt(0), "echo off", "ver");
+
+    expect(rowText(shell.screen, 4)).toBe(VERSION);
+  });
+
+  test("the setting starts on", () => {
+    expect(shellAt(0).echo).toBe(true);
+  });
+});
+
+describe("COPY CON", () => {
+  const eof: ShellKey = { type: "char", char: "\x1A" };
+  const COUNT_1 = "        1 File(s) copied";
+
+  const fileText = (shell: ShellState, name: string) => {
+    const found = shell.disk.filesystem.root.entries.find((entry) => entry.name === name);
+    return found?.kind === "file" && found.content.kind === "text" ? found.content.text : undefined;
+  };
+
+  test("Two lines", () => {
+    const shell = press(run(shellAt(0), "copy con note.txt", "hello", "world"), eof, enter);
+
+    expect(rows(shell, 1, 6)).toEqual(["hello", "world", "^Z", COUNT_1, "", PROMPT]);
+    expect(fileText(shell, "NOTE.TXT")).toBe("hello\r\nworld\r\n");
+    expect(fileText(shell, "NOTE.TXT")).toHaveLength(14);
+  });
+
+  test("Ending on a line with text", () => {
+    const shell = press(run(shellAt(0), "copy con note.txt"), ...type("last"), eof, enter);
+
+    expect(fileText(shell, "NOTE.TXT")).toBe("last");
+  });
+
+  test("Nothing typed", () => {
+    const shell = press(run(shellAt(0), "copy con empty.txt"), eof, enter);
+
+    expect(rowText(shell.screen, 2)).toBe("        0 File(s) copied");
+    expect(fileText(shell, "EMPTY.TXT")).toBeUndefined();
+  });
+
+  test("Editing a line", () => {
+    const shell = press(run(shellAt(0), "copy con note.txt"), ...type("helo"), left, ...type("l"), enter, eof, enter);
+
+    expect(fileText(shell, "NOTE.TXT")).toBe("hello\r\n");
+  });
+
+  test("Escape clears only the line", () => {
+    const shell = press(run(shellAt(0), "copy con note.txt"), ...type("oops"), escape);
+
+    expect(shell.line).toBe("");
+    expect(shell.input.type).toBe("question");
+  });
+
+  test("Not in history", () => {
+    const shell = press(press(run(shellAt(0), "copy con note.txt", "hello"), eof, enter), up);
+
+    expect(shell.line).toBe("copy con note.txt");
+  });
+
+  test("lines hold at most 127 characters", () => {
+    const shell = press(run(shellAt(0), "copy con note.txt"), ...type("x".repeat(130)));
+
+    expect(shell.line).toHaveLength(127);
+  });
+
+  test("an existing file is asked about once the text is typed", () => {
+    const shell = press(run(shellAt(0), "copy con readme.txt", "new"), eof, enter);
+
+    expect(rowText(shell.screen, shell.screen.cursor.row)).toBe("Overwrite C:\\README.TXT (Yes/No/All)?");
+    expect(fileText(run(shell, "y"), "README.TXT")).toBe("new\r\n");
+  });
+
+  test("No way to get stuck", () => {
+    const shell = press(run(shellAt(0), "copy con note.txt", "a", "b"), ...type("partial"), key("home"), eof, enter);
+
+    expect(shell.input.type).toBe("command");
+    expect(fileText(shell, "NOTE.TXT")).toBe("a\r\nb\r\n");
   });
 });

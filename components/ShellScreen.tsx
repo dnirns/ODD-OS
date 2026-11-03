@@ -6,6 +6,7 @@ import { startTicker } from "../os/programs/ticker";
 import type { Registry } from "../os/programs/types";
 import { createClock } from "../os/shell/clock";
 import {
+  acceptsEndOfFile,
   createShell,
   reduceShell,
   type ShellAction,
@@ -41,6 +42,7 @@ const startShell = ({ screen, disk, programmes }: StartProps) =>
 const ShellScreen = ({ screen, disk, onFilesChange, programmes }: ShellScreenProps) => {
   const [state, dispatch] = useReducer(reduce, { screen, disk, programmes }, startShell);
   const tickMs = tickInterval(state);
+  const endOfFile = acceptsEndOfFile(state);
   const { filesystem } = state.disk;
 
   // Keeps browser storage in step with the files. Changing directory, the
@@ -57,7 +59,7 @@ const ShellScreen = ({ screen, disk, onFilesChange, programmes }: ShellScreenPro
         metaKey: event.metaKey,
         altKey: event.altKey,
         altGraph: event.getModifierState("AltGraph"),
-      });
+      }, endOfFile);
       if (!key) return;
 
       if (key.type !== "escape") event.preventDefault();
@@ -66,7 +68,7 @@ const ShellScreen = ({ screen, disk, onFilesChange, programmes }: ShellScreenPro
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [endOfFile]);
 
   useEffect(() => {
     if (tickMs === undefined) return undefined;

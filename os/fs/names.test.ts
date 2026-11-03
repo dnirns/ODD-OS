@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { matchesPattern, normaliseName, parsePattern } from "./names";
+import { mapName, matchesPattern, normaliseName, parsePattern } from "./names";
 
 const normalised = (name: string) => {
   const result = normaliseName(name);
@@ -162,5 +162,28 @@ describe("Wildcard matching", () => {
   test("names still reject wildcards", () => {
     expect(normalised("*.TXT")).toBe("InvalidName");
     expect(normalised("A?.TXT")).toBe("InvalidName");
+  });
+});
+
+describe("mapName", () => {
+  const mapped = (pattern: string, name: string) => {
+    const parsed = parsePattern(pattern);
+    return parsed.ok ? mapName(parsed.value, name) : parsed.error;
+  };
+
+  test.each([
+    ["*.BAK", "README.TXT", "README.BAK"],
+    ["*.bak", "readme.txt", "README.BAK"],
+    ["?.DOC", "A.TXT", "A.DOC"],
+    ["NEW*.*", "README.TXT", "NEWDME.TXT"],
+    ["*.", "README.TXT", "README"],
+    ["*.*", "CONFIG.SYS", "CONFIG.SYS"],
+    ["X?Y.*", "ABC.TXT", "XBY.TXT"],
+    ["*.TXT", "ODDWARE", "ODDWARE.TXT"],
+    ["????????.???", "A.B", "A.B"],
+    ["A*", "README.TXT", "AEADME.TXT"],
+    ["LONGNAMES.TEXT", "A.B", "LONGNAME.TEX"],
+  ])("%j maps %j to %j", (pattern, name, expected) => {
+    expect(mapped(pattern, name)).toBe(expected);
   });
 });

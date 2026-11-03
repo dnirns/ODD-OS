@@ -26,7 +26,7 @@ const result = (line: string, cwd = "C:\\", history: readonly string[] = []) =>
 
 const printed = (line: string, cwd = "C:\\", history: readonly string[] = []) => {
   const output = result(line, cwd, history);
-  if (output.type !== "print") throw new Error(`expected print, got ${output.type}`);
+  if (output.type !== "print" && output.type !== "page") throw new Error(`expected print, got ${output.type}`);
   return output.lines;
 };
 

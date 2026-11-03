@@ -18,13 +18,19 @@ const printed = (line: string) => {
   return result.lines;
 };
 
+const listed = (line: string) => {
+  const result = runCommand(line, context);
+  if (result.type !== "page" && result.type !== "print") throw new Error(`expected a list, got ${result.type}`);
+  return result.lines;
+};
+
 const clockAfter = (result: CommandResult) => {
   if (result.type !== "setClock") throw new Error(`expected setClock, got ${result.type}`);
   return readClock(result.clock, now);
 };
 
 describe("unknown commands", () => {
-  test.each(["foo /x", "copy a b", "worm.exe", "constructor", "__proto__", "/x", ",;", "c:ver"])("rejects %j", (line) => {
+  test.each(["foo /x", "attrib a b", "worm.exe", "constructor", "__proto__", "/x", ",;", "c:ver"])("rejects %j", (line) => {
     expect(printed(line)).toEqual(["Bad command or file name"]);
   });
 });
@@ -50,20 +56,32 @@ describe("CLS and VER", () => {
 
 describe("HELP", () => {
   test("lists working commands alphabetically", () => {
-    const [heading, ...rows] = printed("help");
+    const result = runCommand("help", context);
+    const [heading, ...rows] = listed("help");
 
+    expect(result.type).toBe("page");
     expect(heading).toBe("For more information on a specific command, type HELP command-name");
     expect(rows.map((row) => row.split(" ")[0])).toEqual([
       "CD",
       "CHDIR",
       "CLS",
       "COMMAND",
+      "COPY",
       "DATE",
+      "DEL",
       "DIR",
       "DOSKEY",
+      "ECHO",
+      "ERASE",
       "EXIT",
       "HELP",
+      "MD",
       "MEM",
+      "MKDIR",
+      "RD",
+      "REN",
+      "RENAME",
+      "RMDIR",
       "TIME",
       "TYPE",
       "VER",
@@ -75,12 +93,22 @@ describe("HELP", () => {
     "CHDIR",
     "CLS",
     "COMMAND",
+    "COPY",
     "DATE",
+    "DEL",
     "DIR",
     "DOSKEY",
+    "ECHO",
+    "ERASE",
     "EXIT",
     "HELP",
+    "MD",
     "MEM",
+    "MKDIR",
+    "RD",
+    "REN",
+    "RENAME",
+    "RMDIR",
     "TIME",
     "TYPE",
     "VER",
@@ -92,6 +120,17 @@ describe("HELP", () => {
     },
   );
 
+  test("Help for the new file commands", () => {
+    const copy = printed("copy /?").join("\n");
+
+    for (const option of ["/A", "/B", "/V", "/Y", "/-Y"]) expect(copy).toContain(option);
+    expect(printed("del /?")).toEqual(printed("erase /?"));
+    expect(printed("del /?").join("\n")).toContain("/P");
+    expect(printed("md /?")).toEqual(printed("mkdir /?"));
+    expect(printed("rd /?")).toEqual(printed("rmdir /?"));
+    expect(printed("ren /?")).toEqual(printed("rename /?"));
+  });
+
   test("unknown topics and bad arguments", () => {
     expect(printed("help foo")).toEqual(["Help not available for this command"]);
     expect(printed("help /x")).toEqual(["Invalid switch"]);
@@ -100,7 +139,6 @@ describe("HELP", () => {
 
   test("no line exceeds the screen width", () => {
     const lines = [
-      "help",
       "cd /?",
       "chdir /?",
       "cls /?",
@@ -111,8 +149,16 @@ describe("HELP", () => {
       "time /?",
       "type /?",
       "ver /?",
+      "copy /?",
+      "del /?",
+      "echo /?",
+      "md /?",
+      "rd /?",
+      "ren /?",
       "mem",
     ].flatMap(printed);
+
+    expect(listed("help").every((line) => line.length <= COLUMNS)).toBe(true);
 
     expect(lines.every((line) => line.length <= COLUMNS)).toBe(true);
   });

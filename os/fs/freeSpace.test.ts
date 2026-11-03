@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import { directory, NO_ATTRIBUTES, opaqueFile, textFile } from "./entries";
 import { freeBytes } from "./freeSpace";
-import { writeFile } from "./operations";
+import { createDirectory, deleteFile, removeDirectory, writeFile } from "./operations";
 import { createFilesystem } from "./seed";
 import type { Filesystem } from "./types";
 
@@ -18,7 +18,28 @@ const write = (fs: Filesystem, path: string, text: string) => {
   return result.value;
 };
 
+const done = (result: ReturnType<typeof writeFile>) => {
+  if (!result.ok) throw new Error(result.error);
+  return result.value;
+};
+
 describe("Free space", () => {
+  test("a new directory uses one cluster, given back when it is removed", () => {
+    const before = freeBytes(seeded, MB);
+    const made = done(createDirectory(seeded, "C:\\", "GAMES", NOW));
+
+    expect(before - freeBytes(made, MB)).toBe(CLUSTER);
+    expect(freeBytes(done(removeDirectory(made, "C:\\", "GAMES")), MB)).toBe(before);
+  });
+
+  test("a deleted file gives its clusters back", () => {
+    const before = freeBytes(seeded, MB);
+    const withFile = write(seeded, "BIG.TXT", "x".repeat(8193));
+
+    expect(freeBytes(done(deleteFile(withFile, "C:\\", "BIG.TXT")), MB)).toBe(before);
+    expect(freeBytes(done(deleteFile(seeded, "C:\\", "README.TXT")), MB)).toBe(before + CLUSTER);
+  });
+
   test("the seeded disk has the data area less 25 clusters", () => {
     expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 25) * CLUSTER);
   });

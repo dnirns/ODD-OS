@@ -1,7 +1,17 @@
 import { describe, expect, test } from "vitest";
 
 import { ARCHIVE, directory, NO_ATTRIBUTES, opaqueFile, textFile } from "./entries";
-import { findEntries, listDirectory, readFile, writeFile } from "./operations";
+import {
+  createDirectory,
+  deleteFile,
+  findEntries,
+  listDirectory,
+  readFile,
+  removeDirectory,
+  renameFile,
+  writeEntry,
+  writeFile,
+} from "./operations";
 import { createTestFilesystem } from "./testTree";
 import type { FileContent, Filesystem, FsError } from "./types";
 
@@ -478,5 +488,177 @@ describe("findEntries", () => {
     ["..\\x", "PathNotFound"],
   ])("fails for %j with %s", (spec, error) => {
     expect(find(spec)).toBe(error);
+  });
+});
+
+const valueOf = (result: ReturnType<typeof writeFile>): Filesystem => {
+  if (!result.ok) throw new Error(`operation failed: ${result.error}`);
+  return result.value;
+};
+
+const errorOf = (result: ReturnType<typeof writeFile>): FsError | "ok" =>
+  result.ok ? "ok" : result.error;
+
+const READ_ONLY = { ...ARCHIVE, readOnly: true };
+
+const withReadOnly = () =>
+  valueOf(writeEntry(fs, "C:\\", "LOCKED.TXT", { kind: "text", text: "x" }, NOW, READ_ONLY));
+
+describe("Creating a directory", () => {
+  test("adds an empty directory at the end of its parent", () => {
+    const created = valueOf(createDirectory(fs, "C:\\", "games", NOW));
+    const entries = list("C:\\", created);
+    const last = typeof entries === "string" ? undefined : entries.at(-1);
+
+    expect(last).toEqual({ name: "GAMES", kind: "directory", modified: NOW, attributes: NO_ATTRIBUTES, size: 0 });
+    expect(list("C:\\GAMES", created)).toEqual([]);
+  });
+
+  test("works relative to the working directory", () => {
+    const created = valueOf(createDirectory(fs, "C:\\DOS", "TOOLS", NOW));
+
+    expect(names("C:\\DOS", created)).toEqual(["HIMEM.SYS", "TOOLS"]);
+  });
+
+  test("leaves the earlier value unchanged", () => {
+    createDirectory(fs, "C:\\", "games", NOW);
+
+    expect(names("C:\\")).not.toContain("GAMES");
+  });
+
+  test.each([
+    ["C:\\DOS", "AccessDenied"],
+    ["C:\\README.TXT", "AccessDenied"],
+    ["C:\\", "AccessDenied"],
+    ["C:\\MISSING\\GAMES", "PathNotFound"],
+    ["C:\\README.TXT\\GAMES", "PathNotFound"],
+    ["a+b", "InvalidName"],
+    ["NUL", "InvalidName"],
+    ["D:\\GAMES", "InvalidDrive"],
+  ])("fails for %j with %s", (path, error) => {
+    expect(errorOf(createDirectory(fs, "C:\\", path, NOW))).toBe(error);
+  });
+});
+
+describe("Removing a directory", () => {
+  test("removes an empty directory", () => {
+    const removed = valueOf(removeDirectory(fs, "C:\\", "oddware"));
+
+    expect(names("C:\\", removed)).toEqual(["COMMAND.COM", "DOS", "CONFIG.SYS", "AUTOEXEC.BAT", "README.TXT"]);
+  });
+
+  test("refuses a directory holding entries, hidden ones included", () => {
+    const hidden = valueOf(
+      writeEntry(fs, "C:\\", "ODDWARE\\SECRET", { kind: "text", text: "" }, NOW, { ...ARCHIVE, hidden: true }),
+    );
+
+    expect(errorOf(removeDirectory(fs, "C:\\", "DOS"))).toBe("AccessDenied");
+    expect(errorOf(removeDirectory(hidden, "C:\\", "ODDWARE"))).toBe("AccessDenied");
+  });
+
+  test.each([
+    ["C:\\", "AccessDenied"],
+    ["README.TXT", "NotADirectory"],
+    ["MISSING", "PathNotFound"],
+    ["MISSING\\X", "PathNotFound"],
+  ])("fails for %j with %s", (path, error) => {
+    expect(errorOf(removeDirectory(fs, "C:\\", path))).toBe(error);
+  });
+});
+
+describe("Deleting a file", () => {
+  test("takes the file out, leaving the other entries in order", () => {
+    const deleted = valueOf(deleteFile(fs, "C:\\", "config.sys"));
+
+    expect(read("CONFIG.SYS", deleted)).toBe("FileNotFound");
+    expect(names("C:\\", deleted)).toEqual(["COMMAND.COM", "DOS", "AUTOEXEC.BAT", "ODDWARE", "README.TXT"]);
+  });
+
+  test("keeps a read-only file", () => {
+    const locked = withReadOnly();
+
+    expect(errorOf(deleteFile(locked, "C:\\", "LOCKED.TXT"))).toBe("AccessDenied");
+    expect(text("LOCKED.TXT", locked)).toBe("x");
+  });
+
+  test.each([
+    ["DOS", "IsADirectory"],
+    ["MISSING.TXT", "FileNotFound"],
+    ["MISSING\\A.TXT", "PathNotFound"],
+    ["CON", "InvalidName"],
+  ])("fails for %j with %s", (path, error) => {
+    expect(errorOf(deleteFile(fs, "C:\\", path))).toBe(error);
+  });
+});
+
+describe("Renaming a file", () => {
+  test("renames in place, keeping contents, time and attributes", () => {
+    const renamed = valueOf(renameFile(fs, "C:\\", "readme.txt", "readme.old"));
+    const last = (filesystem: Filesystem) => {
+      const entries = listDirectory(filesystem, "C:\\", "C:\\");
+      return entries.ok ? entries.value.at(-1) : undefined;
+    };
+
+    expect(names("C:\\", renamed)).toEqual(["COMMAND.COM", "DOS", "CONFIG.SYS", "AUTOEXEC.BAT", "ODDWARE", "README.OLD"]);
+    expect(last(renamed)).toEqual({ ...last(fs), name: "README.OLD" });
+    expect(text("README.OLD", renamed)).toBe("hello");
+  });
+
+  test("renames within a subdirectory", () => {
+    const renamed = valueOf(renameFile(fs, "C:\\", "dos\\himem.sys", "himem.old"));
+
+    expect(names("C:\\DOS", renamed)).toEqual(["HIMEM.OLD"]);
+  });
+
+  test("accepts a change of letter case alone", () => {
+    expect(errorOf(renameFile(fs, "C:\\", "readme.txt", "README.TXT"))).toBe("ok");
+  });
+
+  test.each([
+    ["README.TXT", "CONFIG.SYS", "AccessDenied"],
+    ["README.TXT", "DOS", "AccessDenied"],
+    ["MISSING.TXT", "X.TXT", "FileNotFound"],
+    ["DOS", "SYSTEM", "IsADirectory"],
+    ["README.TXT", "A+B", "InvalidName"],
+    ["README.TXT", "PRN", "InvalidName"],
+  ])("renaming %j to %j fails with %s", (path, name, error) => {
+    expect(errorOf(renameFile(fs, "C:\\", path, name))).toBe(error);
+  });
+});
+
+describe("Writing a copy", () => {
+  test("writes an opaque file with the given time at the end of its directory", () => {
+    const copied = valueOf(writeEntry(fs, "C:\\", "ODDWARE\\X.COM", { kind: "opaque", size: 100 }, NOW, ARCHIVE));
+    const entries = list("C:\\ODDWARE", copied);
+
+    expect(entries).toEqual([{ name: "X.COM", kind: "file", modified: NOW, attributes: ARCHIVE, size: 100 }]);
+  });
+
+  test("replaces an existing file in place with the given attributes", () => {
+    const copied = valueOf(writeEntry(fs, "C:\\", "CONFIG.SYS", { kind: "text", text: "new" }, NOW, ARCHIVE));
+
+    expect(names("C:\\", copied)).toEqual(names("C:\\"));
+    expect(text("CONFIG.SYS", copied)).toBe("new");
+  });
+
+  test.each([
+    ["LOCKED.TXT", "AccessDenied"],
+    ["DOS", "IsADirectory"],
+    ["MISSING\\A.TXT", "PathNotFound"],
+    ["AUX", "InvalidName"],
+  ])("fails for %j with %s", (path, error) => {
+    expect(errorOf(writeEntry(withReadOnly(), "C:\\", path, { kind: "text", text: "" }, NOW, ARCHIVE))).toBe(error);
+  });
+});
+
+describe("New operations never throw", () => {
+  test.each(["", "\\\\", "...", "a*b", "C:", "C:\\..\\..", "\u0000"])("for %j", (path) => {
+    expect(() => {
+      createDirectory(fs, "C:\\", path, NOW);
+      removeDirectory(fs, "C:\\", path);
+      deleteFile(fs, "C:\\", path);
+      renameFile(fs, "C:\\", path, path);
+      writeEntry(fs, "C:\\", path, { kind: "text", text: "" }, NOW, ARCHIVE);
+    }).not.toThrow();
   });
 });

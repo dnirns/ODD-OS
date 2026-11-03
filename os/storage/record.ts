@@ -1,18 +1,21 @@
-import { applyChanges, type FileChange } from "../fs/changes";
+import { applyChanges, type DiskChanges, type EntryChange, type KeptDirectory, type KeptEntry } from "../fs/changes";
 import type { Disk } from "../fs/disk";
 import { normaliseName } from "../fs/names";
 import { createFilesystem } from "../fs/seed";
 import type { Attributes, FileContent, FileEntry } from "../fs/types";
 
-export const FORMAT = 1;
+// Format 1 kept only files. Format 2 also keeps new directories and the
+// shipped entries the visitor removed.
+export const FORMAT = 2;
 
 export type KeptRecord = {
   readonly format: typeof FORMAT;
-  readonly files: readonly FileChange[];
+  readonly removed: readonly (readonly string[])[];
+  readonly entries: readonly EntryChange[];
 };
 
 export type RecordRead =
-  | { readonly kind: "changes"; readonly changes: readonly FileChange[] }
+  | { readonly kind: "changes"; readonly changes: DiskChanges }
   | { readonly kind: "invalid" }
   | { readonly kind: "newer" };
 
@@ -28,7 +31,7 @@ export type StartingDisk = {
   readonly saving: boolean;
 };
 
-export const toRecord = (changes: readonly FileChange[]): KeptRecord => ({ format: FORMAT, files: changes });
+export const toRecord = ({ removed, entries }: DiskChanges): KeptRecord => ({ format: FORMAT, removed, entries });
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -83,27 +86,67 @@ const toFile = (value: unknown): FileEntry | undefined => {
   };
 };
 
-const toChange = (value: unknown): FileChange | undefined => {
-  if (!isObject(value) || !Array.isArray(value.directory) || !value.directory.every(isName)) {
+const toDirectory = (value: unknown): KeptDirectory | undefined => {
+  if (!isObject(value) || value.kind !== "directory" || !isName(value.name) || !isDate(value.modified)) {
     return undefined;
   }
-  const file = toFile(value.file);
-  return file && { directory: [...value.directory], file };
+  const attributes = toAttributes(value.attributes);
+  return attributes && {
+    kind: "directory",
+    name: value.name,
+    modified: new Date(value.modified.getTime()),
+    attributes,
+  };
+};
+
+const toEntry = (value: unknown): KeptEntry | undefined => toFile(value) ?? toDirectory(value);
+
+const toNames = (value: unknown): readonly string[] | undefined =>
+  Array.isArray(value) && value.every(isName) ? [...value] : undefined;
+
+const toChange = (
+  value: unknown,
+  readEntry: (entry: unknown) => KeptEntry | undefined,
+  key: "file" | "entry",
+): EntryChange | undefined => {
+  if (!isObject(value)) return undefined;
+  const directory = toNames(value.directory);
+  const entry = readEntry(value[key]);
+  return directory && entry && { directory, entry };
+};
+
+const allOrNothing = <T>(values: readonly (T | undefined)[]): readonly T[] | undefined =>
+  values.every((value) => value !== undefined) ? values.filter((value) => value !== undefined) : undefined;
+
+const toRemoval = (value: unknown) => {
+  const names = toNames(value);
+  return names && names.length > 0 ? names : undefined;
+};
+
+const readChanges = (value: Record<string, unknown>, format: number): DiskChanges | undefined => {
+  if (format === 1) {
+    if (!Array.isArray(value.files)) return undefined;
+    const entries = allOrNothing(value.files.map((file) => toChange(file, toFile, "file")));
+    return entries && { removed: [], entries };
+  }
+  if (!Array.isArray(value.removed) || !Array.isArray(value.entries)) return undefined;
+  const removed = allOrNothing(value.removed.map(toRemoval));
+  const entries = allOrNothing(value.entries.map((entry) => toChange(entry, toEntry, "entry")));
+  return removed && entries && { removed, entries };
 };
 
 // Stored values come from outside the programme: everything is checked, and
-// one bad file makes the whole record invalid.
+// one bad entry makes the whole record invalid. Records of the earlier
+// format are still read.
 export const readRecord = (value: unknown): RecordRead => {
   if (!isObject(value)) return { kind: "invalid" };
   const { format } = value;
   if (typeof format !== "number" || !Number.isInteger(format)) return { kind: "invalid" };
   if (format > FORMAT) return { kind: "newer" };
-  if (format !== FORMAT || !Array.isArray(value.files)) return { kind: "invalid" };
+  if (format < 1) return { kind: "invalid" };
 
-  const changes = value.files.map(toChange);
-  return changes.every((change) => change !== undefined)
-    ? { kind: "changes", changes }
-    : { kind: "invalid" };
+  const changes = readChanges(value, format);
+  return changes ? { kind: "changes", changes } : { kind: "invalid" };
 };
 
 const startWith = (filesystem: Disk["filesystem"], saving: boolean): StartingDisk => ({

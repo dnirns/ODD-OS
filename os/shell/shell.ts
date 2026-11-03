@@ -13,11 +13,16 @@ import { stepProgramme } from "../programs/step";
 import type { Exited, ProgrammeEvent, Registry, Running } from "../programs/types";
 import type { Clock } from "./clock";
 import {
+  type Answer,
   answerPrompt,
+  type CommandContext,
   type CommandResult,
+  PAUSE_MESSAGE,
+  PROMPT_TEXT,
   type PromptInput,
-  runCommand,
+  type QuestionRead,
 } from "./commands";
+import { PAGE_ROWS, runRedirected } from "./redirect";
 import {
   addEntry,
   createHistory,
@@ -33,23 +38,28 @@ import type { ShellKey } from "./shellKeys";
 
 const MAX_LINE_LENGTH = 127;
 
-const PROMPT_TEXT: Readonly<Record<PromptInput, string>> = {
-  date: "Enter new date (mm-dd-yy): ",
-  time: "Enter new time: ",
-};
-
 type Position = {
   readonly row: number;
   readonly column: number;
 };
 
-const PAUSE_MESSAGE = "Press any key to continue . . .";
-const PAGE_ROWS = ROWS - 2;
+export const END_OF_FILE = "\x1A";
+
+// The end-of-file character is one character of the line, shown as `^Z`.
+const shown = (text: string) => text.replaceAll(END_OF_FILE, "^Z");
+
 
 type InputMode =
   | { readonly type: "command" }
   | { readonly type: PromptInput }
-  | { readonly type: "pause"; readonly remaining: readonly string[] };
+  | { readonly type: "pause"; readonly remaining: readonly string[] }
+  | {
+      readonly type: "question";
+      readonly read: QuestionRead;
+      readonly answer: Answer;
+      // The finished lines of a file being typed, each ending in CR and LF.
+      readonly text: string;
+    };
 
 export type ActiveProgramme = {
   readonly programme: Running;
@@ -69,6 +79,8 @@ export type ShellState = {
   readonly programmes: Registry;
   readonly depth: number;
   readonly running: ActiveProgramme | undefined;
+  // ECHO's setting. While it is off, the command prompt is not shown.
+  readonly echo: boolean;
 };
 
 export type ShellAction = {
@@ -103,17 +115,18 @@ const redraw = (
     readonly cursor?: number;
   },
 ): ShellState => {
+  const text = shown(line);
   const overflow = Math.max(
-    cellAt(state.lineStart, line.length).row - (ROWS - 1),
+    cellAt(state.lineStart, text.length).row - (ROWS - 1),
     0,
   );
   const lineStart = { ...state.lineStart, row: state.lineStart.row - overflow };
   const screen = writeWrapped(
     overflow > 0 ? scrollUp(state.screen, overflow) : state.screen,
     lineStart,
-    line.padEnd(state.line.length),
+    text.padEnd(shown(state.line).length),
   );
-  const { row, column } = cellAt(lineStart, cursor);
+  const { row, column } = cellAt(lineStart, shown(line.slice(0, cursor)).length);
 
   return {
     ...state,
@@ -186,7 +199,7 @@ const startLine = (state: ShellState, screen: Screen): ShellState => ({
 });
 
 const toCommandPrompt = (state: ShellState, screen: Screen): ShellState => ({
-  ...startLine(state, showPrompt(screen, formatPrompt(state.disk.cwd))),
+  ...startLine(state, showPrompt(screen, state.echo ? formatPrompt(state.disk.cwd) : "")),
   input: { type: "command" },
 });
 
@@ -215,7 +228,7 @@ const continuePaging = (state: ShellState): ShellState =>
     ? showPage(state, nextRow(state.screen), state.input.remaining)
     : state;
 
-const applyResult = (
+export const applyResult = (
   state: ShellState,
   screen: Screen,
   result: CommandResult,
@@ -233,6 +246,8 @@ const applyResult = (
         ),
         input: { type: result.input },
       };
+    case "setEcho":
+      return toCommandPrompt({ ...state, echo: result.echo }, nextRow(screen));
     case "setClock":
       return toCommandPrompt({ ...state, clock: result.clock }, nextRow(screen));
     case "setDirectory":
@@ -242,6 +257,18 @@ const applyResult = (
       );
     case "page":
       return showPage(state, screen, result.lines);
+    case "withDisk":
+      return applyResult({ ...state, disk: result.disk }, screen, result.result);
+    case "files":
+      return toCommandPrompt(
+        { ...state, disk: result.disk },
+        nextRow(printLines(screen, result.lines)),
+      );
+    case "question":
+      return {
+        ...startLine(state, showPrompt(printLines(screen, result.lines), result.prompt)),
+        input: { type: "question", read: result.read, answer: result.answer, text: "" },
+      };
     case "nest":
       return {
         ...toCommandPrompt(state, nextRow(printLines(screen, result.lines))),
@@ -285,17 +312,38 @@ const stepRunning = (state: ShellState, event: ProgrammeEvent): ShellState => {
 export const tickShell = (state: ShellState, now: number): ShellState =>
   stepRunning(state, { type: "tick", now });
 
+export const acceptsEndOfFile = ({ input, running }: ShellState): boolean =>
+  running === undefined && input.type === "question" && input.read === "file";
+
 export const tickInterval = ({ running }: ShellState): number | undefined =>
   running?.programme.tickMs;
 
+const contextOf = (state: ShellState, now: number, history: History): CommandContext => ({
+  clock: state.clock,
+  now,
+  disk: state.disk,
+  history: history.entries,
+  programmes: state.programmes,
+  echo: state.echo,
+});
+
 const submit = (state: ShellState, now: number): ShellState => {
-  const { screen, lineStart, line, history, input, clock, disk } = state;
-  const end = cellAt(lineStart, line.length);
+  const { screen, lineStart, line, history, input } = state;
+  const end = cellAt(lineStart, shown(line).length);
   const afterLine = nextRow(moveCursor(screen, end.row, end.column));
   const entries = addEntry(history, line);
-  const context = { clock, now, disk, history: entries.entries, programmes: state.programmes };
+  const context = contextOf(state, now, entries);
 
   if (input.type === "pause") return state;
+  if (input.type === "question") {
+    const end = line.indexOf(END_OF_FILE);
+
+    if (input.read === "file" && end === -1) {
+      return { ...startLine(state, afterLine), input: { ...input, text: `${input.text}${line}\r\n` } };
+    }
+    const text = input.read === "file" ? input.text + line.slice(0, end) : line;
+    return applyResult(state, afterLine, input.answer(text, context));
+  }
   if (input.type !== "command") {
     return applyResult(state, afterLine, answerPrompt(input.type, line, context));
   }
@@ -304,7 +352,7 @@ const submit = (state: ShellState, now: number): ShellState => {
   return applyResult(
     { ...state, history: entries },
     afterLine,
-    runCommand(line, context),
+    runRedirected(line, context),
   );
 };
 
@@ -326,6 +374,7 @@ export const createShell = (
   programmes,
   depth: 0,
   running: undefined,
+  echo: true,
 });
 
 export const reduceShell = (
@@ -336,6 +385,9 @@ export const reduceShell = (
 
   if (state.running) return stepRunning(state, { type: "key", key, now });
   if (state.input.type === "pause") return continuePaging(state);
+  if (state.input.type === "question" && state.input.read === "key") {
+    return applyResult(state, state.screen, state.input.answer("", contextOf(state, now, history)));
+  }
 
   switch (key.type) {
     case "char":

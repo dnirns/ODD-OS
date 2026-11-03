@@ -55,7 +55,7 @@ describe("without browser storage", () => {
   });
 
   test("saving does nothing and does not throw", async () => {
-    expect(() => saveKept(toRecord([]))).not.toThrow();
+    expect(() => saveKept(toRecord({ removed: [], entries: [] }))).not.toThrow();
     await expect(readKept(3000)).resolves.toEqual({ kind: "unavailable" });
   });
 });

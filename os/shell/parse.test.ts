@@ -1,8 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { parseArguments, parseCommand, parseDriveCommand } from "./parse";
+import { parseArguments, parseCommand, parseDriveCommand, splitRedirection } from "./parse";
 
 describe("parseCommand", () => {
+  test("keeps the text after the name exactly as typed", () => {
+    expect(parseCommand("  echo.  Two  Spaces ").rest).toBe(".  Two  Spaces ");
+  });
+
   test("upper-cases the name", () => {
     expect(parseCommand("vEr").name).toBe("VER");
   });
@@ -97,10 +101,11 @@ describe("parseArguments", () => {
   });
 
   test("gives the same result as parseCommand for the rest of a line", () => {
-    const { name, ...rest } = parseCommand("doskey /history foo");
+    const { name, rest, ...args } = parseCommand("doskey /history foo");
 
     expect(name).toBe("DOSKEY");
-    expect(parseArguments(" /history foo")).toEqual(rest);
+    expect(rest).toBe(" /history foo");
+    expect(parseArguments(rest)).toEqual(args);
   });
 
   test("returns nothing for empty text", () => {
@@ -115,5 +120,29 @@ describe("parseDriveCommand", () => {
 
   test.each(["c:ver", "c:\\dos", "c", "c: x", "ab:", ":"])("rejects %j", (line) => {
     expect(parseDriveCommand(line)).toBeUndefined();
+  });
+});
+
+describe("splitRedirection", () => {
+  test.each([
+    ["dir > list.txt", "dir ", "list.txt", false],
+    ["echo hi>a.txt", "echo hi", "a.txt", false],
+    ["echo two >> a.txt", "echo two ", "a.txt", true],
+    ["> a.txt echo hi", " echo hi", "a.txt", false],
+    ["dir >a.txt /w", "dir  /w", "a.txt", false],
+    ["echo x>a.txt>b.txt", "echo x", "b.txt", false],
+    ["dir > a.txt >> b.txt", "dir  ", "b.txt", true],
+    ["echo hello > a.txt", "echo hello ", "a.txt", false],
+    ["dir>,nul", "dir", "nul", false],
+  ])("%j", (line, rest, name, append) => {
+    expect(splitRedirection(line)).toEqual({ line: rest, target: { name, append } });
+  });
+
+  test("a line with no redirection is unchanged", () => {
+    expect(splitRedirection("dir /w")).toEqual({ line: "dir /w", target: undefined });
+  });
+
+  test.each(["dir >", "dir >> ", "dir > /w", "> >a.txt"])("%j has a missing name", (line) => {
+    expect(splitRedirection(line)).toBeUndefined();
   });
 });
