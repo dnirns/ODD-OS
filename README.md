@@ -14,3 +14,5 @@ npm run typecheck  # generate route types and type check
 npm run lint       # run ESLint
 npm run build      # create a production build
 ```
+
+CI runs `npm test`, `npm run typecheck`, `npm run lint` and `npm run build` on Node 22 and 24 for every push and pull request to `master`.
