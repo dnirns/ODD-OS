@@ -4,10 +4,16 @@ import type { Filesystem } from "./types";
 
 const CRLF = "\r\n";
 
-const lines = (...text: readonly string[]) => text.map((line) => line + CRLF).join("");
+const lines = (...text: readonly string[]) =>
+  text.map((line) => line + CRLF).join("");
 
-const at = (year: number, month: number, day: number, hours: number, minutes: number) =>
-  new Date(Date.UTC(year, month - 1, day, hours, minutes));
+const at = (
+  year: number,
+  month: number,
+  day: number,
+  hours: number,
+  minutes: number,
+) => new Date(Date.UTC(year, month - 1, day, hours, minutes));
 
 const DOS_RELEASED = at(1993, 3, 10, 6, 0);
 const DOS_INSTALLED = at(1993, 9, 14, 9, 12);
@@ -15,6 +21,7 @@ const SYSTEM_CONFIGURED = at(1993, 9, 14, 9, 31);
 const ODDWARE_ADDED = at(1993, 9, 20, 16, 48);
 const WORM_COPIED = at(1993, 9, 20, 16, 49);
 const README_WRITTEN = at(1993, 9, 20, 16, 52);
+const CREDITS_WRITTEN = at(1993, 9, 20, 16, 55);
 
 const COMMAND_COM_SIZE = 53_214;
 const HIMEM_SYS_SIZE = 29_104;
@@ -25,7 +32,11 @@ const WORM_EXE_SIZE = 23_744;
 
 export const AUTOEXEC_BAT = lines(...AUTOEXEC_COMMANDS);
 
-export const CONFIG_SYS = lines("DEVICE=C:\\DOS\\HIMEM.SYS", "DOS=HIGH", "FILES=30");
+export const CONFIG_SYS = lines(
+  "DEVICE=C:\\DOS\\HIMEM.SYS",
+  "DOS=HIGH",
+  "FILES=30",
+);
 
 export const README_TXT = lines(
   "ODD/OS Version 3.14",
@@ -43,6 +54,18 @@ export const README_TXT = lines(
   "Please contact your dealer for assistance with this product.",
 );
 
+export const CREDITS_TXT = lines(
+  "Credits",
+  "",
+  "ODD/OS",
+  "",
+  "DEVELOPED BY",
+  "Daniel Lowena-Irons",
+  "",
+  "SOURCE CODE",
+  "https://github.com/dnirns/ODD-OS",
+);
+
 export const createFilesystem = (): Filesystem => ({
   root: directory("", DOS_INSTALLED, [
     opaqueFile("COMMAND.COM", DOS_RELEASED, COMMAND_COM_SIZE),
@@ -54,7 +77,10 @@ export const createFilesystem = (): Filesystem => ({
     ]),
     textFile("CONFIG.SYS", SYSTEM_CONFIGURED, CONFIG_SYS),
     textFile("AUTOEXEC.BAT", SYSTEM_CONFIGURED, AUTOEXEC_BAT),
-    directory("ODDWARE", ODDWARE_ADDED, [opaqueFile("WORM.EXE", WORM_COPIED, WORM_EXE_SIZE)]),
+    directory("ODDWARE", ODDWARE_ADDED, [
+      opaqueFile("WORM.EXE", WORM_COPIED, WORM_EXE_SIZE),
+    ]),
     textFile("README.TXT", README_WRITTEN, README_TXT),
+    textFile("CREDITS.TXT", CREDITS_WRITTEN, CREDITS_TXT),
   ]),
 });

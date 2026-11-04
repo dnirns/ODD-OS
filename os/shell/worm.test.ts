@@ -214,10 +214,10 @@ describe("WORM.LOG through the shell", () => {
 
   test("Listed by DIR", () => {
     const rows = allRows(run(sessions(1), "dir \\").screen);
-    const readme = rows.findIndex((text) => text.startsWith("README   TXT"));
+    const credits = rows.findIndex((text) => text.startsWith("CREDITS  TXT"));
 
-    expect(rows[readme + 1]).toMatch(/^WORM {5}LOG +\d+ 11-02-93 {3}3:45p$/);
-    expect(rows.some((text) => /^ +5 file\(s\)/.test(text))).toBe(true);
+    expect(rows[credits + 1]).toMatch(/^WORM {5}LOG +\d+ 11-02-93 {3}3:45p$/);
+    expect(rows.some((text) => /^ +6 file\(s\)/.test(text))).toBe(true);
   });
 
   test("Shown by TYPE", () => {

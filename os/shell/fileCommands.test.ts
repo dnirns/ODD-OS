@@ -199,6 +199,7 @@ describe("Directory listing layout", () => {
       "AUTOEXEC.BAT",
       "ODDWARE",
       "README.TXT",
+      "CREDITS.TXT",
     ]);
   });
 
@@ -209,11 +210,11 @@ describe("Directory listing layout", () => {
     ]);
   });
 
-  test("the summary counts four files and shows the free space", () => {
+  test("the summary counts five files and shows the free space", () => {
     const [files, free] = printed("dir").slice(-2);
 
-    expect(files).toMatch(/^ +4 file\(s\) +[\d,]+ bytes$/);
-    expect(free).toMatch(/^ +356,114,432 bytes free$/);
+    expect(files).toMatch(/^ +5 file\(s\) +[\d,]+ bytes$/);
+    expect(free).toMatch(/^ +356,106,240 bytes free$/);
   });
 });
 
@@ -301,7 +302,7 @@ describe("Directory listing parameters", () => {
 
 describe("Wildcards in DIR", () => {
   test("star in the extension", () => {
-    expect(dirNames("dir *.txt")).toEqual(["README.TXT"]);
+    expect(dirNames("dir *.txt")).toEqual(["README.TXT", "CREDITS.TXT"]);
   });
 
   test("star alone lists every visible entry", () => {
@@ -381,7 +382,7 @@ describe("Wide listings", () => {
     const rows = printed("dir /w");
 
     expect(rows[4].split(/\s+/)).toEqual(["COMMAND.COM", "[DOS]", "CONFIG.SYS", "AUTOEXEC.BAT", "[ODDWARE]"]);
-    expect(rows[5]).toBe("README.TXT");
+    expect(rows[5].split(/\s+/)).toEqual(["README.TXT", "CREDITS.TXT"]);
   });
 
   test("the switch needs no space", () => {

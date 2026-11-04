@@ -31,6 +31,11 @@ const content = (path: string) => {
   return result.ok ? result.value : result.error;
 };
 
+const textOf = (path: string) => {
+  const file = content(path);
+  return typeof file === "object" && file.kind === "text" ? file.text : "";
+};
+
 describe("Contents of drive C", () => {
   test("Seeded tree", () => {
     expect(names("C:\\")).toEqual([
@@ -40,10 +45,11 @@ describe("Contents of drive C", () => {
       "AUTOEXEC.BAT",
       "ODDWARE",
       "README.TXT",
+      "CREDITS.TXT",
     ]);
     expect(names("C:\\DOS")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM"]);
     expect(names("C:\\ODDWARE")).toEqual(["WORM.EXE"]);
-    expect(all).toHaveLength(11);
+    expect(all).toHaveLength(12);
   });
 
   test("ODDWARE holds only the game", () => {
@@ -62,7 +68,7 @@ describe("Contents of drive C", () => {
       expect(content(path)).toMatchObject({ kind: "opaque" });
     });
 
-    ["C:\\CONFIG.SYS", "C:\\AUTOEXEC.BAT", "C:\\README.TXT"].forEach((path) => {
+    ["C:\\CONFIG.SYS", "C:\\AUTOEXEC.BAT", "C:\\README.TXT", "C:\\CREDITS.TXT"].forEach((path) => {
       expect(content(path)).toMatchObject({ kind: "text" });
     });
   });
@@ -105,8 +111,27 @@ describe("Contents of drive C", () => {
     });
   });
 
+  test("Credits notice", () => {
+    const text = textOf("C:\\CREDITS.TXT");
+    const lines = text.split("\r\n");
+
+    expect(text).toMatch(/^[\x20-\x7e\r\n]*$/);
+    lines.forEach((line) => {
+      expect(line.length).toBeLessThanOrEqual(80);
+    });
+    expect(text).toContain("Daniel Irons");
+    expect(lines).toContain("https://github.com/dnirns/ODD-OS");
+  });
+
+  test("The manual does not carry the credit", () => {
+    const text = textOf("C:\\README.TXT");
+
+    expect(text).not.toContain("Daniel Irons");
+    expect(text).not.toContain("github.com");
+  });
+
   test("DOS text files end each line with a carriage return and line feed", () => {
-    ["C:\\CONFIG.SYS", "C:\\AUTOEXEC.BAT", "C:\\README.TXT"].forEach((path) => {
+    ["C:\\CONFIG.SYS", "C:\\AUTOEXEC.BAT", "C:\\README.TXT", "C:\\CREDITS.TXT"].forEach((path) => {
       const file = content(path);
       const text = typeof file === "object" && file.kind === "text" ? file.text : "";
 
@@ -130,6 +155,7 @@ describe("Seeded timestamps", () => {
     ["C:\\ODDWARE", "1993-09-20T16:48:00.000Z"],
     ["C:\\ODDWARE\\WORM.EXE", "1993-09-20T16:49:00.000Z"],
     ["C:\\README.TXT", "1993-09-20T16:52:00.000Z"],
+    ["C:\\CREDITS.TXT", "1993-09-20T16:55:00.000Z"],
   ])("%s is modified at %s", (path, expected) => {
     const resolved = resolvePath(fs, "C:\\", path);
 
