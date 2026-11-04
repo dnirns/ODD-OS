@@ -119,14 +119,14 @@ describe("Contents of drive C", () => {
     lines.forEach((line) => {
       expect(line.length).toBeLessThanOrEqual(80);
     });
-    expect(text).toContain("Daniel Irons");
+    expect(text).toContain("Daniel Lowena-Irons");
     expect(lines).toContain("https://github.com/dnirns/ODD-OS");
   });
 
   test("The manual does not carry the credit", () => {
     const text = textOf("C:\\README.TXT");
 
-    expect(text).not.toContain("Daniel Irons");
+    expect(text).not.toContain("Irons");
     expect(text).not.toContain("github.com");
   });
 
