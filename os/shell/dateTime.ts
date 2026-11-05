@@ -23,6 +23,10 @@ export const formatTime = (date: Date) => {
   return `${hour}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}.${pad(hundredths)}${hours < 12 ? "a" : "p"}`;
 };
 
+// The time `PROMPT $T` shows: 24 hours, with hundredths.
+export const formatPromptTime = (date: Date) =>
+  `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}.${pad(Math.floor(date.getUTCMilliseconds() / 10))}`;
+
 export const parseDate = (text: string): CalendarDate | undefined => {
   const match = DATE_PATTERN.exec(text);
   if (!match) return undefined;

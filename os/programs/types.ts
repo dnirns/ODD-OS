@@ -1,3 +1,4 @@
+import type { Environment } from "../environment/environment";
 import type { Disk } from "../fs/disk";
 import type { Result } from "../fs/types";
 import type { Clock } from "../shell/clock";
@@ -27,6 +28,8 @@ export type LaunchContext = {
   readonly now: number;
   readonly history: readonly string[];
   readonly commands: readonly CommandInfo[];
+  // A copy: a programme cannot change its parent's environment.
+  readonly environment: Environment;
 };
 
 // The only way a programme writes. It takes a disk and returns a new one;

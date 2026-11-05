@@ -11,7 +11,9 @@ import { resolvePath } from "../fs/path";
 import type { Entry, Filesystem } from "../fs/types";
 import { createClock } from "../shell/clock";
 import { NO_BEHAVIOUR, PROGRAMMES, runExecutable } from "./registry";
-import { SEARCH_PATH } from "./resolve";
+import { getVariable } from "../environment/environment";
+import { STARTING_ENVIRONMENT } from "../shell/environmentCommands";
+import { searchDirectories } from "./resolve";
 import type { Registry } from "./types";
 
 const filesystem = createFilesystem();
@@ -82,6 +84,7 @@ describe("The registry and the disk agree", () => {
       now: 0,
       history: [],
       commands: [],
+      environment: [],
     };
 
     executablePaths(filesystem.root.entries).forEach((path) => {
@@ -93,15 +96,15 @@ describe("The registry and the disk agree", () => {
 });
 
 describe("The search path matches AUTOEXEC.BAT", () => {
-  test("SEARCH_PATH is the value the PATH command sets", () => {
+  test("the starting PATH is the value the PATH command sets", () => {
     const pathLine = AUTOEXEC_COMMANDS.find((command) => /^PATH\s/i.test(command));
 
     expect(pathLine).toBeDefined();
-    expect(pathLine?.replace(/^PATH\s+/i, "").split(";")).toEqual(SEARCH_PATH);
+    expect(pathLine?.replace(/^PATH\s+/i, "")).toEqual(getVariable(STARTING_ENVIRONMENT, "PATH"));
   });
 
   test("every directory on the search path exists", () => {
-    SEARCH_PATH.forEach((directory) => {
+    searchDirectories(STARTING_ENVIRONMENT).forEach((directory) => {
       const resolved = resolvePath(filesystem, "C:\\", directory);
 
       expect(resolved.ok && resolved.value.entry.kind).toBe("directory");
@@ -119,7 +122,7 @@ const importedModules = (code: string) =>
   Array.from(code.matchAll(/(?:from|import)\s+["']([^"']+)["']/g), ([, module]) => module);
 
 const ALLOWED_IMPORT =
-  /^\.\/|^\.\.\/(fs\/|autoexec$|machine$|version$|terminal\/screen$|shell\/shellKeys$|shell\/clock$)/;
+  /^\.\/|^\.\.\/(fs\/|environment\/|autoexec$|machine$|version$|terminal\/screen$|shell\/shellKeys$|shell\/clock$)/;
 const BROWSER_GLOBALS = /\b(window|document|navigator|localStorage|indexedDB|globalThis)\b/;
 
 describe("os/programs stays independent of the shell and the UI", () => {

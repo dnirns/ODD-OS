@@ -3,7 +3,8 @@ import { describe, expect, test } from "vitest";
 import { directory, opaqueFile } from "../fs/entries";
 import { createFilesystem } from "../fs/seed";
 import type { Filesystem } from "../fs/types";
-import { resolveExecutable, SEARCH_PATH, splitExecutableLine } from "./resolve";
+import { setVariable } from "../environment/environment";
+import { resolveExecutable, searchDirectories, splitExecutableLine } from "./resolve";
 
 const WHEN = new Date(Date.UTC(1993, 2, 10, 6, 0));
 const seeded = createFilesystem();
@@ -22,8 +23,13 @@ const withFiles: Filesystem = {
   ]),
 };
 
-const resolve = (token: string, cwd = "C:\\", filesystem = seeded) => {
-  const result = resolveExecutable(filesystem, cwd, token);
+const resolve = (
+  token: string,
+  cwd = "C:\\",
+  filesystem = seeded,
+  searchPath: readonly string[] = ["C:\\DOS"],
+) => {
+  const result = resolveExecutable(filesystem, cwd, token, searchPath);
   return result.type === "found" ? result.path : result.type;
 };
 
@@ -46,8 +52,46 @@ describe("splitExecutableLine", () => {
 });
 
 describe("The search path", () => {
-  test("is C:\\DOS, the value AUTOEXEC.BAT sets", () => {
-    expect(SEARCH_PATH).toEqual(["C:\\DOS"]);
+  const withPath = (value: string) => setVariable([], "PATH", value);
+
+  test("is the directories of the PATH variable, in order", () => {
+    expect(searchDirectories(withPath("C:\\DOS;C:\\ODDWARE"))).toEqual([
+      "C:\\DOS",
+      "C:\\ODDWARE",
+    ]);
+  });
+
+  test("drops empty entries", () => {
+    expect(searchDirectories(withPath(";C:\\DOS;;C:\\ODDWARE;"))).toEqual([
+      "C:\\DOS",
+      "C:\\ODDWARE",
+    ]);
+  });
+
+  test("is empty when PATH is not set", () => {
+    expect(searchDirectories([])).toEqual([]);
+  });
+
+  test("finds a programme in a later directory", () => {
+    expect(resolve("worm", "C:\\", seeded, ["C:\\DOS", "C:\\ODDWARE"])).toBe("C:\\ODDWARE\\WORM.EXE");
+  });
+
+  test("runs the one in the directory listed first", () => {
+    expect(resolve("mem", "C:\\", withFiles, ["C:\\ODDWARE", "C:\\DOS"])).toBe("C:\\ODDWARE\\MEM.EXE");
+    expect(resolve("mem", "C:\\", withFiles, ["C:\\DOS", "C:\\ODDWARE"])).toBe("C:\\DOS\\MEM.EXE");
+  });
+
+  test("with no path, only the current directory is searched", () => {
+    expect(resolve("mem", "C:\\", seeded, [])).toBe("notFound");
+    expect(resolve("mem", "C:\\DOS", seeded, [])).toBe("C:\\DOS\\MEM.EXE");
+  });
+
+  test("skips an entry on an unknown drive or in a missing directory", () => {
+    expect(resolve("mem", "C:\\", seeded, ["Z:\\BIN", "C:\\NOWHERE", "C:\\DOS"])).toBe("C:\\DOS\\MEM.EXE");
+  });
+
+  test("still reports an unknown drive typed with the name", () => {
+    expect(resolve("a:mem", "C:\\", seeded, ["C:\\DOS"])).toBe("invalidDrive");
   });
 });
 

@@ -1,9 +1,14 @@
+import { type Environment, getVariable } from "../environment/environment";
 import { hasWildcard } from "../fs/names";
 import { resolvePath } from "../fs/path";
 import type { Filesystem } from "../fs/types";
 
-// The value `AUTOEXEC.BAT` gives `PATH`.
-export const SEARCH_PATH: readonly string[] = ["C:\\DOS"];
+// The directories of the `PATH` variable, in order. Empty entries are dropped.
+export const searchDirectories = (environment: Environment): readonly string[] =>
+  (getVariable(environment, "PATH") ?? "")
+    .split(";")
+    .map((directory) => directory.trim())
+    .filter((directory) => directory !== "");
 
 const LEADING_DELIMITERS = /^[ \t,;=]+/;
 const TOKEN = /^[^ \t,;=/]*/;
@@ -63,13 +68,15 @@ export const resolveExecutable = (
   filesystem: Filesystem,
   cwd: string,
   token: string,
+  searchPath: readonly string[],
 ): Resolution => {
   if (hasWildcard(token)) return notFound;
 
   const { location, file } = splitLocation(token);
   if (file === "") return notFound;
 
-  const directories = location === "" ? ["", ...SEARCH_PATH] : [location];
+  const explicit = location !== "";
+  const directories = explicit ? [location] : ["", ...searchPath];
   const paths = directories.flatMap((directory) =>
     candidateNames(file).map((name) => joinPath(directory, name)),
   );
@@ -80,7 +87,8 @@ export const resolveExecutable = (
     if (resolved.ok && resolved.value.entry.kind === "file") {
       return { type: "found", path: resolved.value.path };
     }
-    if (!resolved.ok && resolved.error === "InvalidDrive") {
+    // A directory on the path that cannot be searched is skipped.
+    if (explicit && !resolved.ok && resolved.error === "InvalidDrive") {
       return { type: "invalidDrive" };
     }
   }

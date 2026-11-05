@@ -7,11 +7,12 @@ import {
   scrollUp,
   writeText,
 } from "../terminal/screen";
+import { type Environment } from "../environment/environment";
 import { createDisk, type Disk } from "../fs/disk";
 import { PROGRAMMES } from "../programs/registry";
 import { stepProgramme } from "../programs/step";
 import type { Exited, ProgrammeEvent, Registry, Running } from "../programs/types";
-import type { Clock } from "./clock";
+import { type Clock, readClock } from "./clock";
 import {
   type Answer,
   answerPrompt,
@@ -32,6 +33,7 @@ import {
   recallOldest,
   recallPrevious,
 } from "./history";
+import { STARTING_ENVIRONMENT } from "./environmentCommands";
 import { formatPrompt } from "./prompt";
 import { layoutRows } from "./text";
 import type { ShellKey } from "./shellKeys";
@@ -81,6 +83,12 @@ export type ShellState = {
   readonly running: ActiveProgramme | undefined;
   // ECHO's setting. While it is off, the command prompt is not shown.
   readonly echo: boolean;
+  // This interpreter's environment, and those of the interpreters that
+  // started it, the nearest last.
+  readonly environment: Environment;
+  readonly outer: readonly Environment[];
+  // The time of the latest key or tick, which the prompt's `$T` and `$D` read.
+  readonly now: number;
 };
 
 export type ShellAction = {
@@ -189,6 +197,22 @@ const showPrompt = (screen: Screen, prompt: string): Screen => {
   return moveCursor(writeText(screen, row, 0, prompt), row, prompt.length);
 };
 
+// The command prompt is printed like output, so it can take several rows,
+// wrap and scroll. The cursor stays after its last character.
+const showCommandPrompt = (screen: Screen, prompt: string): Screen => {
+  const rows = prompt.split("\n").flatMap((part) => layoutRows(part));
+  const last = rows.at(-1) ?? "";
+  const printed = rows.slice(0, -1).reduce(printRow, screen);
+
+  if (last.length >= COLUMNS) return printRow(printed, last);
+
+  const { row } = printed.cursor;
+  return moveCursor(writeText(printed, row, 0, last), row, last.length);
+};
+
+const promptOf = ({ echo, environment, disk, clock, now }: ShellState) =>
+  echo ? formatPrompt(environment, disk.cwd, readClock(clock, now)) : "";
+
 const startLine = (state: ShellState, screen: Screen): ShellState => ({
   ...state,
   screen,
@@ -199,7 +223,7 @@ const startLine = (state: ShellState, screen: Screen): ShellState => ({
 });
 
 const toCommandPrompt = (state: ShellState, screen: Screen): ShellState => ({
-  ...startLine(state, showPrompt(screen, state.echo ? formatPrompt(state.disk.cwd) : "")),
+  ...startLine(state, showCommandPrompt(screen, promptOf(state))),
   input: { type: "command" },
 });
 
@@ -250,6 +274,11 @@ export const applyResult = (
       return toCommandPrompt({ ...state, echo: result.echo }, nextRow(screen));
     case "setClock":
       return toCommandPrompt({ ...state, clock: result.clock }, nextRow(screen));
+    case "setEnvironment":
+      return toCommandPrompt(
+        { ...state, environment: result.environment },
+        nextRow(screen),
+      );
     case "setDirectory":
       return toCommandPrompt(
         { ...state, disk: { ...state.disk, cwd: result.cwd } },
@@ -271,12 +300,20 @@ export const applyResult = (
       };
     case "nest":
       return {
-        ...toCommandPrompt(state, nextRow(printLines(screen, result.lines))),
+        ...toCommandPrompt(
+          { ...state, outer: [...state.outer, state.environment] },
+          nextRow(printLines(screen, result.lines)),
+        ),
         depth: state.depth + 1,
       };
     case "leave":
       return toCommandPrompt(
-        { ...state, depth: Math.max(state.depth - 1, 0) },
+        {
+          ...state,
+          depth: Math.max(state.depth - 1, 0),
+          environment: state.outer.at(-1) ?? state.environment,
+          outer: state.outer.slice(0, -1),
+        },
         nextRow(screen),
       );
     case "launch":
@@ -309,8 +346,21 @@ const stepRunning = (state: ShellState, event: ProgrammeEvent): ShellState => {
     : leaveProgramme(state, running, next);
 };
 
+// Records the time for the prompt, and gives back the same state when the
+// step changed nothing.
+const atTime = (
+  previous: ShellState,
+  now: number,
+  step: (state: ShellState) => ShellState,
+): ShellState => {
+  const state = { ...previous, now };
+  const next = step(state);
+
+  return next === state ? previous : next;
+};
+
 export const tickShell = (state: ShellState, now: number): ShellState =>
-  stepRunning(state, { type: "tick", now });
+  atTime(state, now, (timed) => stepRunning(timed, { type: "tick", now }));
 
 export const acceptsEndOfFile = ({ input, running }: ShellState): boolean =>
   running === undefined && input.type === "question" && input.read === "file";
@@ -325,6 +375,7 @@ const contextOf = (state: ShellState, now: number, history: History): CommandCon
   history: history.entries,
   programmes: state.programmes,
   echo: state.echo,
+  environment: state.environment,
 });
 
 const submit = (state: ShellState, now: number): ShellState => {
@@ -361,6 +412,7 @@ export const createShell = (
   clock: Clock,
   disk: Disk = createDisk(),
   programmes: Registry = PROGRAMMES,
+  environment: Environment = STARTING_ENVIRONMENT,
 ): ShellState => ({
   screen,
   lineStart: { row: screen.cursor.row, column: screen.cursor.column },
@@ -375,12 +427,17 @@ export const createShell = (
   depth: 0,
   running: undefined,
   echo: true,
+  environment,
+  outer: [],
+  now: 0,
 });
 
 export const reduceShell = (
-  state: ShellState,
-  { key, now }: ShellAction,
-): ShellState => {
+  previous: ShellState,
+  action: ShellAction,
+): ShellState => atTime(previous, action.now, (state) => reduceKey(state, action));
+
+const reduceKey = (state: ShellState, { key, now }: ShellAction): ShellState => {
   const { line, cursor, history } = state;
 
   if (state.running) return stepRunning(state, { type: "key", key, now });

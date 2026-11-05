@@ -44,6 +44,7 @@ const context = (cwd = "C:\\"): LaunchContext => ({
   now: 0,
   history: [],
   commands: [],
+  environment: [{ name: "PATH", value: "C:\\DOS" }],
 });
 
 const mem: CommandProgramme = {
@@ -148,6 +149,49 @@ describe("Command programmes", () => {
 
     expect(run("mem", args("/?"))).toEqual(print("Memory help."));
     expect(mem.run).not.toHaveBeenCalled();
+  });
+});
+
+describe("Programmes see the environment", () => {
+  test("a command programme receives the variables as a value it can read", () => {
+    const environment = [
+      { name: "PATH", value: "C:\\DOS" },
+      { name: "GREETING", value: "Hello" },
+    ];
+
+    runExecutable("mem", args(), { ...context(), environment }, registry);
+
+    const given = vi.mocked(mem.run).mock.lastCall?.[1];
+    expect(given?.environment).toEqual(environment);
+  });
+
+  test("a programme that changes its copy leaves the interpreter's alone", () => {
+    const environment = [{ name: "PATH", value: "C:\\DOS" }];
+    const meddling: CommandProgramme = {
+      ...mem,
+      run: (_, given) => {
+        (given.environment as { name: string; value: string }[]).length = 0;
+        return print();
+      },
+    };
+
+    runExecutable(
+      "mem",
+      args(),
+      { ...context(), environment: [...environment] },
+      { "C:\\DOS\\MEM.EXE": meddling },
+    );
+
+    expect(environment).toEqual([{ name: "PATH", value: "C:\\DOS" }]);
+  });
+
+  test("the search follows the PATH it is given", () => {
+    const onlyOddware = [{ name: "PATH", value: "C:\\ODDWARE" }];
+
+    expect(runExecutable("mem", args(), { ...context(), environment: onlyOddware }, registry)).toEqual(
+      print("Bad command or file name"),
+    );
+    expect(runExecutable("game", args(), { ...context(), environment: onlyOddware }, registry).type).toBe("launch");
   });
 });
 

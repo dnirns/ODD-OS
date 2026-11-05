@@ -88,6 +88,12 @@ describe("writeText", () => {
     expect(rowText(screen, 0).slice(0, 7)).toBe("A B C D");
   });
 
+  test("draws the escape character as the VGA left arrow, in one cell", () => {
+    const screen = writeText(createScreen(), 0, 0, "A\u001bB");
+
+    expect(rowText(screen, 0).slice(0, 3)).toBe("A\u2190B");
+  });
+
   test("gives a surrogate pair exactly one cell", () => {
     const { rows } = writeText(createScreen(), 0, 0, "\u{1F40D}B");
 

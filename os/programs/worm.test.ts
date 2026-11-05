@@ -21,6 +21,7 @@ const context = (now: number) => ({
   now,
   history: [],
   commands: [],
+  environment: [],
   files: programmeFiles("C:\\ODDWARE", createClock(0)),
 });
 

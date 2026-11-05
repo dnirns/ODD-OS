@@ -113,6 +113,7 @@ const redirect = (target: Target, written: string, disk: Disk, result: CommandRe
     case "setClock":
     case "setDirectory":
     case "setEcho":
+    case "setEnvironment":
     case "leave":
     case "launch":
       return withDisk(save("").disk, result);

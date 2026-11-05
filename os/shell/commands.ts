@@ -1,3 +1,4 @@
+import type { Environment } from "../environment/environment";
 import type { Disk } from "../fs/disk";
 import {
   INVALID_DRIVE,
@@ -15,6 +16,18 @@ import { DEL_HELP, DEL_SUMMARY, runDel } from "./delete";
 import { REN_HELP, REN_SUMMARY, runRen } from "./rename";
 import { MD_HELP, MD_SUMMARY, RD_HELP, RD_SUMMARY, runMd, runRd } from "./dirCommands";
 import { ECHO_HELP, ECHO_SUMMARY, runEcho } from "./echo";
+import {
+  environmentOf,
+  PATH_HELP,
+  PATH_SUMMARY,
+  PROMPT_HELP,
+  PROMPT_SUMMARY,
+  runPath,
+  runPrompt,
+  runSet,
+  SET_HELP,
+  SET_SUMMARY,
+} from "./environmentCommands";
 import {
   CD_HELP,
   CD_SUMMARY,
@@ -66,6 +79,7 @@ export type CommandResult =
   | { readonly type: "leave" }
   | { readonly type: "files"; readonly disk: Disk; readonly lines: readonly string[] }
   | { readonly type: "setEcho"; readonly echo: boolean }
+  | { readonly type: "setEnvironment"; readonly environment: Environment }
   // Another result, applied after the disk changes, as when its output is
   // redirected to a file.
   | { readonly type: "withDisk"; readonly disk: Disk; readonly result: CommandResult }
@@ -85,6 +99,8 @@ export type CommandContext = {
   readonly history?: readonly string[];
   readonly programmes?: Registry;
   readonly echo?: boolean;
+  // Defaults to what the boot leaves.
+  readonly environment?: Environment;
 };
 
 type Command = {
@@ -165,6 +181,9 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     run: withoutSwitches((): CommandResult => ({ type: "leave" })),
   },
   MD: { summary: MD_SUMMARY, help: MD_HELP, run: runMd },
+  PATH: { summary: PATH_SUMMARY, help: PATH_HELP, run: runPath },
+  PROMPT: { summary: PROMPT_SUMMARY, help: PROMPT_HELP, run: runPrompt },
+  SET: { summary: SET_SUMMARY, help: SET_HELP, run: runSet },
   MKDIR: { summary: MD_SUMMARY, help: MD_HELP, run: runMd },
   RD: { summary: RD_SUMMARY, help: RD_HELP, run: runRd },
   RMDIR: { summary: RD_SUMMARY, help: RD_HELP, run: runRd },
@@ -238,7 +257,14 @@ export const runCommand = (
   return runExecutable(
     token,
     parseArguments(rest),
-    { disk, clock, now, history, commands: commandList(programmes) },
+    {
+      disk,
+      clock,
+      now,
+      history,
+      commands: commandList(programmes),
+      environment: environmentOf(context),
+    },
     programmes,
   );
 };

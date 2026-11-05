@@ -46,7 +46,12 @@ const BLANK_CELL: Cell = {
 const clamp = (value: number, max: number) =>
   Math.min(Math.max(value, 0), max);
 
-const toDisplayChar = (char: string) => (/\p{Cc}/u.test(char) ? " " : char);
+// The VGA character set draws the escape character (code 27) as a left arrow.
+const ESCAPE = "\u001b";
+const ESCAPE_GLYPH = "\u2190";
+
+const toDisplayChar = (char: string) =>
+  char === ESCAPE ? ESCAPE_GLYPH : /\p{Cc}/u.test(char) ? " " : char;
 
 export const createScreen = (): Screen => ({
   rows: Array.from({ length: ROWS }, () =>

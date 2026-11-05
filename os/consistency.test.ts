@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { applySteps, createBootScreen, createBootSteps } from "./boot/bootSteps";
+import { getVariable, listVariables } from "./environment/environment";
 import { createDisk } from "./fs/disk";
 import { freeBytes } from "./fs/freeSpace";
 import { readFile, writeFile } from "./fs/operations";
@@ -8,6 +9,9 @@ import { resolvePath } from "./fs/path";
 import { createFilesystem } from "./fs/seed";
 import { MACHINE } from "./machine";
 import { runCommand } from "./shell/commands";
+import { STARTING_ENVIRONMENT } from "./shell/environmentCommands";
+import { formatPrompt, PROMPT } from "./shell/prompt";
+import { createShell } from "./shell/shell";
 import type { Screen } from "./terminal/screen";
 
 const fs = createFilesystem();
@@ -91,6 +95,50 @@ describe("AUTOEXEC.BAT matches the boot", () => {
     const screen = applySteps(createBootScreen(), createBootSteps());
 
     expect(echoedCommands(screen)).not.toEqual([...file, "ECHO OFF"]);
+  });
+});
+
+describe("The starting environment matches the boot", () => {
+  const file = fileLines(textOf("C:\\AUTOEXEC.BAT"));
+  const argumentOf = (command: string) =>
+    file.find((line) => line.toUpperCase().startsWith(`${command} `))?.slice(command.length + 1);
+
+  test("PATH is what AUTOEXEC.BAT sets", () => {
+    expect(getVariable(STARTING_ENVIRONMENT, "PATH")).toBe(argumentOf("PATH"));
+  });
+
+  test("PROMPT is what AUTOEXEC.BAT sets", () => {
+    expect(getVariable(STARTING_ENVIRONMENT, "PROMPT")).toBe(argumentOf("PROMPT"));
+  });
+
+  test("COMSPEC names COMMAND.COM, which exists", () => {
+    const comspec = getVariable(STARTING_ENVIRONMENT, "COMSPEC");
+
+    expect(comspec).toBe("C:\\COMMAND.COM");
+    expect(resolvePath(fs, "C:\\", comspec ?? "").ok).toBe(true);
+  });
+
+  test("holds only COMSPEC and what AUTOEXEC.BAT sets", () => {
+    expect(listVariables(STARTING_ENVIRONMENT).map((text) => text.split("=")[0])).toEqual([
+      "COMSPEC",
+      "PATH",
+      "PROMPT",
+    ]);
+  });
+
+  test("the prompt it gives is the one the boot ends on", () => {
+    const date = new Date(Date.UTC(1993, 10, 1, 15, 45, 12, 340));
+
+    expect(formatPrompt(STARTING_ENVIRONMENT, "C:\\", date)).toBe(PROMPT);
+  });
+
+  test("a skipped boot and a boot that runs to the end start the shell alike", () => {
+    const ran = applySteps(createBootScreen(), createBootSteps());
+    const skipped = applySteps(createBootScreen(), createBootSteps({ reducedMotion: true }));
+    const clock = { offsetMs: 0 };
+
+    expect(createShell(skipped, clock).environment).toEqual(createShell(ran, clock).environment);
+    expect(createShell(ran, clock).environment).toEqual(STARTING_ENVIRONMENT);
   });
 });
 

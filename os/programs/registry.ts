@@ -5,7 +5,7 @@ import { HELP } from "./help";
 import { MEM } from "./mem";
 import type { PrintResult } from "./output";
 import { BAD_COMMAND, INVALID_DRIVE, print } from "./output";
-import { resolveExecutable } from "./resolve";
+import { resolveExecutable, searchDirectories } from "./resolve";
 import type {
   LaunchContext,
   LaunchResult,
@@ -49,7 +49,12 @@ export const runExecutable = (
   registry: Registry,
 ): ProgrammeOutput | LaunchResult => {
   const { filesystem, cwd } = launchContext.disk;
-  const found = resolveExecutable(filesystem, cwd, token);
+  const found = resolveExecutable(
+    filesystem,
+    cwd,
+    token,
+    searchDirectories(launchContext.environment),
+  );
 
   if (found.type === "invalidDrive") return print(INVALID_DRIVE);
   if (found.type === "notFound") return print(BAD_COMMAND);
