@@ -4,15 +4,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
 
-import { AUTOEXEC_COMMANDS } from "../autoexec";
 import { createDisk } from "../fs/disk";
+import { readFile } from "../fs/operations";
 import { createFilesystem } from "../fs/seed";
 import { resolvePath } from "../fs/path";
 import type { Entry, Filesystem } from "../fs/types";
 import { createClock } from "../shell/clock";
 import { NO_BEHAVIOUR, PROGRAMMES, runExecutable } from "./registry";
 import { getVariable } from "../environment/environment";
-import { STARTING_ENVIRONMENT } from "../shell/environmentCommands";
+import { STOCK_ENVIRONMENT } from "../shell/environmentCommands";
 import { searchDirectories } from "./resolve";
 import type { Registry } from "./types";
 
@@ -97,14 +97,16 @@ describe("The registry and the disk agree", () => {
 
 describe("The search path matches AUTOEXEC.BAT", () => {
   test("the starting PATH is the value the PATH command sets", () => {
-    const pathLine = AUTOEXEC_COMMANDS.find((command) => /^PATH\s/i.test(command));
+    const file = readFile(filesystem, "C:\\", "C:\\AUTOEXEC.BAT");
+    const text = file.ok && file.value.kind === "text" ? file.value.text : "";
+    const pathLine = text.split("\r\n").find((command) => /^PATH\s/i.test(command));
 
     expect(pathLine).toBeDefined();
-    expect(pathLine?.replace(/^PATH\s+/i, "")).toEqual(getVariable(STARTING_ENVIRONMENT, "PATH"));
+    expect(pathLine?.replace(/^PATH\s+/i, "")).toEqual(getVariable(STOCK_ENVIRONMENT, "PATH"));
   });
 
   test("every directory on the search path exists", () => {
-    searchDirectories(STARTING_ENVIRONMENT).forEach((directory) => {
+    searchDirectories(STOCK_ENVIRONMENT).forEach((directory) => {
       const resolved = resolvePath(filesystem, "C:\\", directory);
 
       expect(resolved.ok && resolved.value.entry.kind).toBe("directory");

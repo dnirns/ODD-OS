@@ -3,7 +3,7 @@ import { createDisk, type Disk } from "../fs/disk";
 import type { Filesystem } from "../fs/types";
 import { readClock } from "./clock";
 import { type CommandResult, runCommand } from "./commands";
-import { STARTING_ENVIRONMENT } from "./environmentCommands";
+import { STOCK_ENVIRONMENT } from "./environmentCommands";
 
 // Test support: runs command lines as the shell would, without a screen.
 
@@ -54,7 +54,7 @@ const step = ({ disk, environment, result, shown }: Session, line: string): Sess
 
 // Runs lines in turn. While a question is pending, the next line answers it.
 export const session = (disk: Disk, ...lines: readonly string[]): Session =>
-  lines.reduce(step, { disk, environment: STARTING_ENVIRONMENT, result: undefined, shown: [] });
+  lines.reduce(step, { disk, environment: STOCK_ENVIRONMENT, result: undefined, shown: [] });
 
 export const fromRoot = (...lines: readonly string[]) => session(createDisk(), ...lines);
 

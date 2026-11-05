@@ -1,4 +1,3 @@
-import { AUTOEXEC_COMMANDS } from "../autoexec";
 import {
   type Environment,
   getVariable,
@@ -8,7 +7,7 @@ import {
 } from "../environment/environment";
 import { print, TOO_MANY_PARAMETERS } from "../programs/output";
 import type { CommandContext, CommandResult } from "./commands";
-import { type ParsedCommand, parseCommand } from "./parse";
+import type { ParsedCommand } from "./parse";
 
 export const SYNTAX_ERROR = "Syntax error";
 export const NO_PATH = "No Path";
@@ -79,25 +78,19 @@ const applyPrompt = (environment: Environment, rest: string): Applied => {
   );
 };
 
-// What the boot leaves: `COMSPEC`, then what the `PATH` and `PROMPT` lines of
-// `AUTOEXEC.BAT` set.
-const startingEnvironment = (): Environment =>
-  AUTOEXEC_COMMANDS.reduce((environment, line) => {
-    const { name, rest } = parseCommand(line);
-    const applied =
-      name === PATH
-        ? applyPath(environment, rest)
-        : name === PROMPT
-          ? applyPrompt(environment, rest)
-          : show;
+// What the computer starts with, before `AUTOEXEC.BAT` runs.
+export const STARTING_ENVIRONMENT: Environment = setVariable([], "COMSPEC", COMSPEC_VALUE);
 
-    return applied.type === "set" ? applied.environment : environment;
-  }, setVariable([], "COMSPEC", COMSPEC_VALUE));
-
-export const STARTING_ENVIRONMENT: Environment = startingEnvironment();
+// What the stock `AUTOEXEC.BAT` leaves, which tests start from rather than
+// running the file. A consistency test checks it against a real startup.
+export const STOCK_ENVIRONMENT: Environment = setVariable(
+  setVariable(STARTING_ENVIRONMENT, "PATH", "C:\\DOS"),
+  "PROMPT",
+  "$P$G",
+);
 
 export const environmentOf = ({
-  environment = STARTING_ENVIRONMENT,
+  environment = STOCK_ENVIRONMENT,
 }: CommandContext) => environment;
 
 const result = (applied: Applied, otherwise: CommandResult): CommandResult => {

@@ -2,7 +2,12 @@ import { describe, expect, test } from "vitest";
 
 import { type KeyInput, toShellKey } from "./shellKeys";
 
-const press = (key: string, modifiers: Partial<KeyInput> = {}, acceptsEndOfFile = false) =>
+const press = (
+  key: string,
+  modifiers: Partial<KeyInput> = {},
+  acceptsEndOfFile = false,
+  acceptsBreak = false,
+) =>
   toShellKey(
     {
       key,
@@ -13,7 +18,23 @@ const press = (key: string, modifiers: Partial<KeyInput> = {}, acceptsEndOfFile 
       ...modifiers,
     },
     acceptsEndOfFile,
+    acceptsBreak,
   );
+
+describe("The break key", () => {
+  test.each(["c", "C", "Pause", "Cancel"])("Ctrl+%s is the break key while a batch runs", (key) => {
+    expect(press(key, { ctrlKey: true }, false, true)).toEqual({ type: "break" });
+  });
+
+  test("Ctrl+C is left to the browser otherwise", () => {
+    expect(press("c", { ctrlKey: true })).toBeUndefined();
+  });
+
+  test("C without Ctrl is a letter, and Ctrl with Alt is not the break key", () => {
+    expect(press("c", {}, false, true)).toEqual({ type: "char", char: "c" });
+    expect(press("c", { ctrlKey: true, altKey: true }, false, true)).toBeUndefined();
+  });
+});
 
 describe("toShellKey", () => {
   test.each(["a", "Z", "7", " ", "\\", "~", "/", "'"])(

@@ -12,7 +12,7 @@ export const searchDirectories = (environment: Environment): readonly string[] =
 
 const LEADING_DELIMITERS = /^[ \t,;=]+/;
 const TOKEN = /^[^ \t,;=/]*/;
-const EXECUTABLE_EXTENSIONS = ["COM", "EXE"] as const;
+const EXECUTABLE_EXTENSIONS = ["COM", "EXE", "BAT"] as const;
 
 export type ExecutableLine = {
   readonly token: string;

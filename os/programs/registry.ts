@@ -1,3 +1,4 @@
+import { readFile } from "../fs/operations";
 import { COMMAND } from "./command";
 import { DOSKEY } from "./doskey";
 import { programmeFiles } from "./files";
@@ -7,6 +8,7 @@ import type { PrintResult } from "./output";
 import { BAD_COMMAND, INVALID_DRIVE, print } from "./output";
 import { resolveExecutable, searchDirectories } from "./resolve";
 import type {
+  BatchResult,
   LaunchContext,
   LaunchResult,
   ProgrammeArgs,
@@ -42,12 +44,26 @@ const launch = (
   }
 };
 
+// A batch file runs from its text. A file with no text to read finds nothing.
+const batchOf = (
+  { disk }: LaunchContext,
+  path: string,
+  name: string,
+  tail: string,
+): BatchResult | PrintResult => {
+  const content = readFile(disk.filesystem, disk.cwd, path);
+
+  return content.ok && content.value.kind === "text"
+    ? { type: "batch", name, text: content.value.text, tail }
+    : print(BAD_COMMAND);
+};
+
 export const runExecutable = (
   token: string,
   args: ProgrammeArgs,
   launchContext: LaunchContext,
   registry: Registry,
-): ProgrammeOutput | LaunchResult => {
+): ProgrammeOutput | LaunchResult | BatchResult => {
   const { filesystem, cwd } = launchContext.disk;
   const found = resolveExecutable(
     filesystem,
@@ -58,6 +74,7 @@ export const runExecutable = (
 
   if (found.type === "invalidDrive") return print(INVALID_DRIVE);
   if (found.type === "notFound") return print(BAD_COMMAND);
+  if (found.path.endsWith(".BAT")) return batchOf(launchContext, found.path, token, args.tail);
   if (!Object.hasOwn(registry, found.path)) return print(NO_BEHAVIOUR);
 
   const programme = registry[found.path];

@@ -1,4 +1,3 @@
-import { AUTOEXEC_COMMANDS } from "../autoexec";
 import { MACHINE } from "../machine";
 import {
   clearScreen,
@@ -8,7 +7,6 @@ import {
   setCursorVisible,
   writeText,
 } from "../terminal/screen";
-import { PROMPT } from "../shell/prompt";
 
 export type BootStep = {
   readonly delayMs: number;
@@ -27,10 +25,6 @@ const MEMORY_TEST_MS = 3200;
 
 const MEMORY_ROW = 7;
 const SKIP_PROMPT_ROW = 24;
-const PROMPT_ROW = 6;
-const DEFAULT_PROMPT = "C>";
-
-const [PATH_COMMAND, DOSKEY_COMMAND, PROMPT_COMMAND] = AUTOEXEC_COMMANDS;
 
 const show = (
   delayMs: number,
@@ -103,14 +97,5 @@ export const createBootSteps = ({
         moveCursor(writeText(clearScreen(screen), 0, 0, "Starting ODD/OS..."), 1, 0),
         true,
       ),
-  },
-  show(1800, 3, [2, `${DEFAULT_PROMPT}${PATH_COMMAND}`]),
-  show(500, 4, [3, `${DEFAULT_PROMPT}${DOSKEY_COMMAND}`]),
-  show(300, 5, [4, "DOSKey installed."]),
-  show(500, PROMPT_ROW, [5, `${DEFAULT_PROMPT}${PROMPT_COMMAND}`]),
-  {
-    delayMs: 900,
-    apply: (screen) =>
-      moveCursor(writeText(screen, PROMPT_ROW, 0, PROMPT), PROMPT_ROW, PROMPT.length),
   },
 ];

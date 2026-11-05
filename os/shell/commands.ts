@@ -7,7 +7,13 @@ import {
 } from "../programs/output";
 import { PROGRAMMES, runExecutable } from "../programs/registry";
 import { splitExecutableLine } from "../programs/resolve";
-import type { CommandInfo, LaunchResult, Registry } from "../programs/types";
+import type {
+  BatchResult,
+  CommandInfo,
+  InstallResult,
+  LaunchResult,
+  Registry,
+} from "../programs/types";
 import { VERSION } from "../version";
 import { type Clock, readClock, setDate, setTime } from "./clock";
 import { formatDate, formatTime, parseDate, parseTime } from "./dateTime";
@@ -90,6 +96,8 @@ export type CommandResult =
       readonly read: QuestionRead;
       readonly answer: Answer;
     }
+  | InstallResult
+  | BatchResult
   | LaunchResult;
 
 export type CommandContext = {
@@ -101,6 +109,7 @@ export type CommandContext = {
   readonly echo?: boolean;
   // Defaults to what the boot leaves.
   readonly environment?: Environment;
+  readonly doskeyLoaded?: boolean;
 };
 
 type Command = {
@@ -181,6 +190,26 @@ const COMMANDS: Readonly<Record<string, Command>> = {
     run: withoutSwitches((): CommandResult => ({ type: "leave" })),
   },
   MD: { summary: MD_SUMMARY, help: MD_HELP, run: runMd },
+  PAUSE: {
+    summary: "Suspends processing of a batch file and displays a message.",
+    help: [
+      "Suspends processing of a batch file and displays a message.",
+      "",
+      "PAUSE",
+    ],
+    run: (): CommandResult => ({
+      type: "question",
+      lines: [],
+      prompt: PAUSE_MESSAGE,
+      read: "key",
+      answer: () => print(),
+    }),
+  },
+  REM: {
+    summary: "Records comments (remarks) in a batch file.",
+    help: ["Records comments (remarks) in a batch file.", "", "REM [comment]"],
+    run: () => print(),
+  },
   PATH: { summary: PATH_SUMMARY, help: PATH_HELP, run: runPath },
   PROMPT: { summary: PROMPT_SUMMARY, help: PROMPT_HELP, run: runPrompt },
   SET: { summary: SET_SUMMARY, help: SET_HELP, run: runSet },
@@ -264,6 +293,7 @@ export const runCommand = (
       history,
       commands: commandList(programmes),
       environment: environmentOf(context),
+      doskeyLoaded: context.doskeyLoaded,
     },
     programmes,
   );

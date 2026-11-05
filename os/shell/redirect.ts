@@ -110,6 +110,9 @@ const redirect = (target: Target, written: string, disk: Disk, result: CommandRe
         answer: (text, context) => redirect(target, saved.written, context.disk, result.answer(text, context)),
       });
     }
+    case "installDoskey":
+      return withDisk(save(asFileText(result.lines)).disk, { type: "installDoskey", lines: [] });
+    case "batch":
     case "setClock":
     case "setDirectory":
     case "setEcho":

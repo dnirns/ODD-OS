@@ -7,7 +7,7 @@ import type { Screen } from "../os/terminal/screen";
 import Terminal from "./Terminal";
 
 type BootScreenProps = {
-  onComplete: (screen: Screen) => void;
+  onComplete: (screen: Screen, skipped: boolean) => void;
 };
 
 const BootScreen = ({ onComplete }: BootScreenProps) => {
@@ -18,8 +18,11 @@ const BootScreen = ({ onComplete }: BootScreenProps) => {
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
+    let skipped = false;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isSkipKey(event.key)) boot.skip();
+      if (!isSkipKey(event.key)) return;
+      skipped = true;
+      boot.skip();
     };
     const removeListener = () =>
       window.removeEventListener("keydown", onKeyDown);
@@ -30,7 +33,7 @@ const BootScreen = ({ onComplete }: BootScreenProps) => {
       onScreen: setScreen,
       onComplete: (finalScreen) => {
         removeListener();
-        onComplete(finalScreen);
+        onComplete(finalScreen, skipped);
       },
     });
     window.addEventListener("keydown", onKeyDown);

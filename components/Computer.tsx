@@ -19,9 +19,12 @@ const saveFiles = (filesystem: Filesystem) =>
   saveKept(toRecord(diskChanges(createFilesystem(), filesystem)));
 
 const Computer = () => {
-  const [bootScreen, setBootScreen] = useState<Screen>();
+  const [boot, setBoot] = useState<{ readonly screen: Screen; readonly skipped: boolean }>();
   const [start, setStart] = useState<StartingDisk>();
-  const finishBoot = useCallback((screen: Screen) => setBootScreen(screen), []);
+  const finishBoot = useCallback(
+    (screen: Screen, skipped: boolean) => setBoot({ screen, skipped }),
+    [],
+  );
 
   useEffect(() => {
     let current = true;
@@ -33,16 +36,17 @@ const Computer = () => {
     };
   }, []);
 
-  if (!bootScreen) return <BootScreen onComplete={finishBoot} />;
+  if (!boot) return <BootScreen onComplete={finishBoot} />;
 
-  // The boot has finished but the kept files have not been read: the final
+  // The boot has finished but the kept files have not been read: the last
   // boot screen stays, and nothing listens for keys.
-  if (!start) return <Terminal screen={bootScreen} />;
+  if (!start) return <Terminal screen={boot.screen} />;
 
   return (
     <ShellScreen
-      screen={bootScreen}
+      screen={boot.screen}
       disk={start.disk}
+      startup={boot.skipped ? "instant" : "paced"}
       onFilesChange={start.saving ? saveFiles : undefined}
     />
   );

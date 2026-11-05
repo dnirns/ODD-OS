@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { getVariable, listVariables } from "../environment/environment";
-import { SET_HELP, STARTING_ENVIRONMENT } from "./environmentCommands";
+import { SET_HELP, STARTING_ENVIRONMENT, STOCK_ENVIRONMENT } from "./environmentCommands";
 import { fromRoot, lines } from "./testSession";
 
 const variables = (...commands: readonly string[]) =>
@@ -10,8 +10,12 @@ const variables = (...commands: readonly string[]) =>
 const STARTING = ["COMSPEC=C:\\COMMAND.COM", "PATH=C:\\DOS", "PROMPT=$P$G"];
 
 describe("The environment at startup", () => {
-  test("is COMSPEC, then what AUTOEXEC.BAT sets, in order", () => {
-    expect(listVariables(STARTING_ENVIRONMENT)).toEqual(STARTING);
+  test("is COMSPEC alone before AUTOEXEC.BAT runs", () => {
+    expect(listVariables(STARTING_ENVIRONMENT)).toEqual(["COMSPEC=C:\\COMMAND.COM"]);
+  });
+
+  test("the stock environment is COMSPEC, then PATH and PROMPT, in order", () => {
+    expect(listVariables(STOCK_ENVIRONMENT)).toEqual(STARTING);
   });
 
   test("a session starts from it", () => {

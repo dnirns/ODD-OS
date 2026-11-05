@@ -23,6 +23,12 @@ const withFiles: Filesystem = {
   ]),
 };
 
+const withBatch: Filesystem = {
+  root: directory("", WHEN, [
+    directory("ODDWARE", WHEN, [opaqueFile("TOOL.BAT", WHEN, 10), opaqueFile("TOOL.EXE", WHEN, 100)]),
+  ]),
+};
+
 const resolve = (
   token: string,
   cwd = "C:\\",
@@ -117,6 +123,12 @@ describe("Executable names", () => {
     expect(resolve("tool", "C:\\ODDWARE", withFiles)).toBe("C:\\ODDWARE\\TOOL.COM");
   });
 
+  test("BAT is tried after COM and EXE", () => {
+    expect(resolve("autoexec")).toBe("C:\\AUTOEXEC.BAT");
+    expect(resolve("autoexec.bat")).toBe("C:\\AUTOEXEC.BAT");
+    expect(resolve("tool", "C:\\ODDWARE", withBatch)).toBe("C:\\ODDWARE\\TOOL.EXE");
+  });
+
   test("an explicit extension is not substituted", () => {
     expect(resolve("tool.exe", "C:\\ODDWARE", withFiles)).toBe("C:\\ODDWARE\\TOOL.EXE");
     expect(resolve("only.com", "C:\\ODDWARE", withFiles)).toBe("notFound");
@@ -126,7 +138,7 @@ describe("Executable names", () => {
     expect(resolve("mem.com")).toBe("notFound");
   });
 
-  test.each(["readme.txt", "dos\\himem.sys", "config.sys", "autoexec", "autoexec.bat"])(
+  test.each(["readme.txt", "dos\\himem.sys", "config.sys"])(
     "%s is not executable",
     (token) => {
       expect(resolve(token)).toBe("notFound");

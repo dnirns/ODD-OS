@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 
+import { STARTUP_PACE } from "../shell/shell";
 import { COLUMNS, ROWS, type Screen } from "../terminal/screen";
 import {
   applySteps,
@@ -31,6 +32,10 @@ const memoryCounts = (screens: readonly Screen[]) => [
     }),
   ),
 ];
+
+// The stock AUTOEXEC.BAT has three lines and one of them prints.
+const { firstMs, lineMs, outputMs, endMs } = STARTUP_PACE;
+const startupMs = firstMs + 2 * lineMs + outputMs + endMs;
 
 const steps = createBootSteps();
 const screens = screensAfterEachStep(steps);
@@ -73,22 +78,12 @@ describe("createBootSteps", () => {
     const memory = firstScreenWith("8192K OK");
     const devices = firstScreenWith("Fixed Disk 0");
     const starting = firstScreenWith("Starting ODD/OS...");
-    const path = firstScreenWith("C>PATH C:\\DOS");
-    const doskey = firstScreenWith("C>DOSKEY /INSERT");
-    const installed = firstScreenWith("DOSKey installed.");
-    const promptCommand = firstScreenWith("C>PROMPT $P$G");
-    const prompt = screens.findIndex((screen) => rowText(screen, 6) === "C:\\>");
 
     expect(video).toBeGreaterThan(0);
     expect(video).toBeLessThan(header);
     expect(header).toBeLessThan(memory);
     expect(memory).toBeLessThan(devices);
     expect(devices).toBeLessThan(starting);
-    expect(starting).toBeLessThan(path);
-    expect(path).toBeLessThan(doskey);
-    expect(doskey).toBeLessThan(installed);
-    expect(installed).toBeLessThan(promptCommand);
-    expect(promptCommand).toBeLessThan(prompt);
   });
 
   test("shows the detected devices together in one step", () => {
@@ -149,32 +144,23 @@ describe("createBootSteps", () => {
     expect(memory.cursor).toEqual({ row: 8, column: 0, visible: true });
   });
 
-  test("ends at C:\\> with the cursor visible in the next cell", () => {
-    const row = finalScreen.rows.findIndex(
-      (cells) => cells.map((cell) => cell.char).join("").trimEnd() === "C:\\>",
-    );
-
-    expect(row).toBeGreaterThan(-1);
-    expect(finalScreen.cursor).toEqual({ row, column: 4, visible: true });
-  });
-
-  test("echoes the AUTOEXEC.BAT commands above the final prompt", () => {
+  test("ends on Starting ODD/OS... with the cursor on the next row", () => {
     expect(rowText(finalScreen, 0)).toBe("Starting ODD/OS...");
-    expect(rowText(finalScreen, 2)).toBe("C>PATH C:\\DOS");
-    expect(rowText(finalScreen, 3)).toBe("C>DOSKEY /INSERT");
-    expect(rowText(finalScreen, 4)).toBe("DOSKey installed.");
-    expect(rowText(finalScreen, 5)).toBe("C>PROMPT $P$G");
-    expect(rowText(finalScreen, 6)).toBe("C:\\>");
-    expect(finalScreen.cursor).toEqual({ row: 6, column: 4, visible: true });
+    expect(finalScreen.cursor).toEqual({ row: 1, column: 0, visible: true });
   });
 
-  test("takes 12 seconds", () => {
-    expect(totalDelay(steps)).toBe(12000);
+  test("leaves AUTOEXEC.BAT to the shell, and with it 4 of the 12 seconds", () => {
+    const startup = startupMs;
+
+    expect(totalDelay(steps)).toBe(8000);
+    expect(totalDelay(steps) + startup).toBe(12000);
   });
 
-  test("takes between 10 and 14 seconds", () => {
-    expect(totalDelay(steps)).toBeGreaterThanOrEqual(10000);
-    expect(totalDelay(steps)).toBeLessThanOrEqual(14000);
+  test("takes between 10 and 14 seconds with the startup", () => {
+    const startup = startupMs;
+
+    expect(totalDelay(steps) + startup).toBeGreaterThanOrEqual(10000);
+    expect(totalDelay(steps) + startup).toBeLessThanOrEqual(14000);
   });
 
   test("mentions no key other than Escape", () => {

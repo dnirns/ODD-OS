@@ -1,4 +1,3 @@
-import { AUTOEXEC_COMMANDS } from "../autoexec";
 import { directory, opaqueFile, textFile } from "./entries";
 import type { Filesystem } from "./types";
 
@@ -30,7 +29,7 @@ const DOSKEY_COM_SIZE = 5_861;
 const HELP_COM_SIZE = 5_527;
 const WORM_EXE_SIZE = 23_744;
 
-export const AUTOEXEC_BAT = lines(...AUTOEXEC_COMMANDS);
+export const AUTOEXEC_BAT = lines("PATH C:\\DOS", "DOSKEY /INSERT", "PROMPT $P$G");
 
 export const CONFIG_SYS = lines(
   "DEVICE=C:\\DOS\\HIMEM.SYS",

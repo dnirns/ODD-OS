@@ -3,6 +3,7 @@ export type ShellKey =
   | {
       readonly type:
         | "backspace"
+        | "break"
         | "delete"
         | "down"
         | "end"
@@ -59,15 +60,23 @@ const END_OF_FILE_KEY = { type: "char", char: "\x1A" } as const;
 const isEndOfFileKey = ({ key, ctrlKey, metaKey, altKey, altGraph }: KeyInput) =>
   !metaKey && !altKey && !altGraph && (ctrlKey ? key.toLowerCase() === "z" : key === "F6");
 
+const BREAK_KEY = { type: "break" } as const;
+
+const isBreakKey = ({ key, ctrlKey, metaKey, altKey, altGraph }: KeyInput) =>
+  ctrlKey && !metaKey && !altKey && !altGraph && (key.toLowerCase() === "c" || key === "Pause" || key === "Cancel");
+
 // Ctrl+Z and F6 type the end-of-file character only where it is accepted,
-// while `COPY CON` reads a file. Elsewhere the browser keeps them.
+// while `COPY CON` reads a file. Elsewhere the browser keeps them. Ctrl+C and
+// Ctrl+Break are the break key only while a batch file runs; at the prompt
+// the browser keeps Ctrl+C to copy.
 export const toShellKey = (
   input: KeyInput,
   acceptsEndOfFile = false,
+  acceptsBreak = false,
 ): ShellKey | undefined => {
   const { key, ctrlKey, metaKey, altKey, altGraph } = input;
 
-  if (acceptsEndOfFile && isEndOfFileKey(input)) return END_OF_FILE_KEY;
+  if (acceptsBreak && isBreakKey(input)) return BREAK_KEY;  if (acceptsEndOfFile && isEndOfFileKey(input)) return END_OF_FILE_KEY;
   if (altGraph) return toChar(key, isPrintable);
   if (metaKey && !ctrlKey && !altKey) return COMMAND_KEYS[key];
   if (ctrlKey || metaKey) return undefined;

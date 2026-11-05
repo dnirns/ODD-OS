@@ -30,6 +30,8 @@ export type LaunchContext = {
   readonly commands: readonly CommandInfo[];
   // A copy: a programme cannot change its parent's environment.
   readonly environment: Environment;
+  // Whether DOSKEY has been run since the computer started.
+  readonly doskeyLoaded?: boolean;
 };
 
 // The only way a programme writes. It takes a disk and returns a new one;
@@ -48,7 +50,21 @@ export type NestResult = {
   readonly lines: readonly string[];
 };
 
-export type ProgrammeOutput = PrintResult | PageResult | NestResult;
+// A batch file to run: the name as typed, its text and what followed the name.
+export type BatchResult = {
+  readonly type: "batch";
+  readonly name: string;
+  readonly text: string;
+  readonly tail: string;
+};
+
+// DOSKEY, once it has installed itself, and what it printed.
+export type InstallResult = {
+  readonly type: "installDoskey";
+  readonly lines: readonly string[];
+};
+
+export type ProgrammeOutput = PrintResult | PageResult | NestResult | InstallResult;
 
 export type ProgrammeEvent =
   | { readonly type: "key"; readonly key: ProgrammeKey; readonly now: number }

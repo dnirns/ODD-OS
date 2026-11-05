@@ -142,8 +142,19 @@ describe("DOSKEY", () => {
     expect(printed("doskey/History", "C:\\", ["doskey/History"])).toEqual(["doskey/History"]);
   });
 
-  test.each(["doskey", "doskey /insert", "DOSKEY /INSERT"])("%s prints nothing", (line) => {
-    expect(printed(line, "C:\\", [line])).toEqual([]);
+  test.each(["doskey", "doskey /insert", "DOSKEY /INSERT"])("%s installs DOSKey the first time", (line) => {
+    expect(result(line, "C:\\", [line])).toEqual({ type: "installDoskey", lines: ["DOSKey installed."] });
+  });
+
+  test("once installed, DOSKEY prints nothing", () => {
+    const output = runCommand("doskey /insert", {
+      clock: CLOCK,
+      now: NOW,
+      disk: createDisk(),
+      doskeyLoaded: true,
+    });
+
+    expect(output).toEqual({ type: "print", lines: [] });
   });
 
   test.each(["/overstrike", "/macros", "/reinstall", "/x"])("%s is an invalid switch", (option) => {

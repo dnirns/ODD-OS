@@ -9,9 +9,9 @@ import { resolvePath } from "./fs/path";
 import { createFilesystem } from "./fs/seed";
 import { MACHINE } from "./machine";
 import { runCommand } from "./shell/commands";
-import { STARTING_ENVIRONMENT } from "./shell/environmentCommands";
+import { STARTING_ENVIRONMENT, STOCK_ENVIRONMENT } from "./shell/environmentCommands";
 import { formatPrompt, PROMPT } from "./shell/prompt";
-import { createShell } from "./shell/shell";
+import { createShell, startup, tickShell } from "./shell/shell";
 import type { Screen } from "./terminal/screen";
 
 const fs = createFilesystem();
@@ -26,12 +26,6 @@ const fileLines = (text: string) => text.split("\r\n").filter((line) => line !==
 
 const rowText = (screen: Screen, row: number) =>
   screen.rows[row].map((cell) => cell.char).join("").trimEnd();
-
-const echoedCommands = (screen: Screen) =>
-  screen.rows
-    .map((_, row) => rowText(screen, row))
-    .filter((text) => text.startsWith("C>"))
-    .map((text) => text.slice("C>".length));
 
 const memLines = () => {
   const result = runCommand("mem", { clock: { offsetMs: 0 }, now: 0, disk: createDisk() });
@@ -72,29 +66,48 @@ const problems = (config: string, mem: readonly string[]): readonly string[] => 
   ];
 };
 
-describe("AUTOEXEC.BAT matches the boot", () => {
+const clock = { offsetMs: 0 };
+const started = (instant: boolean) =>
+  startup(
+    createShell(
+      applySteps(createBootScreen(), createBootSteps()),
+      clock,
+      createDisk(),
+      undefined,
+      STARTING_ENVIRONMENT,
+    ),
+    0,
+    instant,
+  );
+const ranOut = (shell: ReturnType<typeof started>) => {
+  let current = shell;
+  for (let step = 0; step < 20 && current.batch !== undefined; step += 1) {
+    current = tickShell(current, 0);
+  }
+  return current;
+};
+
+describe("AUTOEXEC.BAT is what the boot runs", () => {
   const file = fileLines(textOf("C:\\AUTOEXEC.BAT"));
-
-  test("Boot echo and file agree", () => {
-    const screen = applySteps(createBootScreen(), createBootSteps());
-
-    expect(echoedCommands(screen)).toEqual(file);
-  });
-
-  test("the reduced-motion boot echoes the same commands", () => {
-    const screen = applySteps(createBootScreen(), createBootSteps({ reducedMotion: true }));
-
-    expect(echoedCommands(screen)).toEqual(file);
-  });
 
   test("the file has one command per line", () => {
     expect(file).toEqual(["PATH C:\\DOS", "DOSKEY /INSERT", "PROMPT $P$G"]);
   });
 
-  test("a changed file would no longer match", () => {
-    const screen = applySteps(createBootScreen(), createBootSteps());
+  test("the stock startup echoes the file's commands above the prompt", () => {
+    const { screen } = ranOut(started(false));
 
-    expect(echoedCommands(screen)).not.toEqual([...file, "ECHO OFF"]);
+    expect(rowText(screen, 0)).toBe("Starting ODD/OS...");
+    expect(rowText(screen, 2)).toBe("C>PATH C:\\DOS");
+    expect(rowText(screen, 3)).toBe("C>DOSKEY /INSERT");
+    expect(rowText(screen, 4)).toBe("DOSKey installed.");
+    expect(rowText(screen, 5)).toBe("C>PROMPT $P$G");
+    expect(rowText(screen, 6)).toBe("C:\\>");
+    expect(screen.cursor).toEqual({ row: 6, column: 4, visible: true });
+  });
+
+  test("a skipped startup ends on the same screen", () => {
+    expect(started(true).screen).toEqual(ranOut(started(false)).screen);
   });
 });
 
@@ -102,13 +115,14 @@ describe("The starting environment matches the boot", () => {
   const file = fileLines(textOf("C:\\AUTOEXEC.BAT"));
   const argumentOf = (command: string) =>
     file.find((line) => line.toUpperCase().startsWith(`${command} `))?.slice(command.length + 1);
+  const booted = started(true);
 
   test("PATH is what AUTOEXEC.BAT sets", () => {
-    expect(getVariable(STARTING_ENVIRONMENT, "PATH")).toBe(argumentOf("PATH"));
+    expect(getVariable(booted.environment, "PATH")).toBe(argumentOf("PATH"));
   });
 
   test("PROMPT is what AUTOEXEC.BAT sets", () => {
-    expect(getVariable(STARTING_ENVIRONMENT, "PROMPT")).toBe(argumentOf("PROMPT"));
+    expect(getVariable(booted.environment, "PROMPT")).toBe(argumentOf("PROMPT"));
   });
 
   test("COMSPEC names COMMAND.COM, which exists", () => {
@@ -119,26 +133,25 @@ describe("The starting environment matches the boot", () => {
   });
 
   test("holds only COMSPEC and what AUTOEXEC.BAT sets", () => {
-    expect(listVariables(STARTING_ENVIRONMENT).map((text) => text.split("=")[0])).toEqual([
+    expect(listVariables(booted.environment).map((text) => text.split("=")[0])).toEqual([
       "COMSPEC",
       "PATH",
       "PROMPT",
     ]);
   });
 
+  test("the environment tests start from is the one a real startup leaves", () => {
+    expect(booted.environment).toEqual(STOCK_ENVIRONMENT);
+  });
+
   test("the prompt it gives is the one the boot ends on", () => {
     const date = new Date(Date.UTC(1993, 10, 1, 15, 45, 12, 340));
 
-    expect(formatPrompt(STARTING_ENVIRONMENT, "C:\\", date)).toBe(PROMPT);
+    expect(formatPrompt(booted.environment, "C:\\", date)).toBe(PROMPT);
   });
 
   test("a skipped boot and a boot that runs to the end start the shell alike", () => {
-    const ran = applySteps(createBootScreen(), createBootSteps());
-    const skipped = applySteps(createBootScreen(), createBootSteps({ reducedMotion: true }));
-    const clock = { offsetMs: 0 };
-
-    expect(createShell(skipped, clock).environment).toEqual(createShell(ran, clock).environment);
-    expect(createShell(ran, clock).environment).toEqual(STARTING_ENVIRONMENT);
+    expect(started(true).environment).toEqual(ranOut(started(false)).environment);
   });
 });
 

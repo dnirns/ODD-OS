@@ -9,7 +9,8 @@ import { print } from "../programs/output";
 import type { Answer, QuestionRead } from "./commands";
 import { VERSION } from "../version";
 import { PROMPT } from "./prompt";
-import { applyResult, createShell, reduceShell, type ShellState } from "./shell";
+import { STARTING_ENVIRONMENT } from "./environmentCommands";
+import { applyResult, createShell, reduceShell, startup, type ShellState } from "./shell";
 import type { ShellKey } from "./shellKeys";
 
 const key = (type: Exclude<ShellKey["type"], "char">): ShellKey => ({ type });
@@ -52,7 +53,7 @@ const LONG = "x".repeat(COLUMNS);
 describe("createShell", () => {
   test("starts at the boot's final cursor", () => {
     const screen = applySteps(createBootScreen(), createBootSteps());
-    const shell = press(createShell(screen, CLOCK), ...type("d"));
+    const shell = press(startup(createShell(screen, CLOCK, createDisk(), undefined, STARTING_ENVIRONMENT), NOW, true), ...type("d"));
 
     expect(rowText(shell.screen, 6)).toBe("C:\\>d");
     expect(cursorAt(shell)).toEqual([6, 5]);
@@ -548,8 +549,9 @@ describe("date and time prompts", () => {
 describe("The prompt shows the working directory", () => {
   test("is C:\\> at the start", () => {
     const screen = applySteps(createBootScreen(), createBootSteps());
+    const shell = startup(createShell(screen, CLOCK, createDisk(), undefined, STARTING_ENVIRONMENT), NOW, true);
 
-    expect(rowText(screen, 6)).toBe("C:\\>");
+    expect(rowText(shell.screen, 6)).toBe("C:\\>");
   });
 
   test("follows a directory change", () => {
