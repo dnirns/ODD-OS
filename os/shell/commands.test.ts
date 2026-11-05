@@ -173,9 +173,10 @@ describe("Help for the filesystem commands", () => {
   test("DIR help names the switches that work and no others", () => {
     const text = printed("dir /?").join("\n");
 
-    expect(text).toContain("/W");
-    expect(text).toContain("/P");
-    expect(text).not.toMatch(/\/[ABCLOS]\b/);
+    ["/A", "/B", "/C", "/CH", "/L", "/O", "/P", "/S", "/W", "DIRCMD"].forEach((item) => {
+      expect(text).toContain(item);
+    });
+    expect(text).not.toMatch(/\/[QTX4]\b/);
     expect(printed("help dir")).toEqual(printed("dir /?"));
   });
 

@@ -1,4 +1,4 @@
-import { directory, opaqueFile, textFile } from "./entries";
+import { directory, NO_ATTRIBUTES, opaqueFile, textFile } from "./entries";
 import type { Filesystem } from "./types";
 
 const CRLF = "\r\n";
@@ -22,12 +22,18 @@ const WORM_COPIED = at(1993, 9, 20, 16, 49);
 const README_WRITTEN = at(1993, 9, 20, 16, 52);
 const CREDITS_WRITTEN = at(1993, 9, 20, 16, 55);
 
+// Invented: close to the sizes of the DOS 6.x files, not copied from a disk.
+const IO_SYS_SIZE = 40_566;
+const MSDOS_SYS_SIZE = 38_138;
 const COMMAND_COM_SIZE = 53_214;
 const HIMEM_SYS_SIZE = 29_104;
 const MEM_EXE_SIZE = 32_502;
 const DOSKEY_COM_SIZE = 5_861;
 const HELP_COM_SIZE = 5_527;
 const WORM_EXE_SIZE = 23_744;
+
+// Read-only, hidden and system, as on a bootable DOS disk. Nothing runs them.
+const BOOT_FILE = { ...NO_ATTRIBUTES, readOnly: true, hidden: true, system: true };
 
 export const AUTOEXEC_BAT = lines("PATH C:\\DOS", "DOSKEY /INSERT", "PROMPT $P$G");
 
@@ -67,6 +73,8 @@ export const CREDITS_TXT = lines(
 
 export const createFilesystem = (): Filesystem => ({
   root: directory("", DOS_INSTALLED, [
+    opaqueFile("IO.SYS", DOS_RELEASED, IO_SYS_SIZE, BOOT_FILE),
+    opaqueFile("MSDOS.SYS", DOS_RELEASED, MSDOS_SYS_SIZE, BOOT_FILE),
     opaqueFile("COMMAND.COM", DOS_RELEASED, COMMAND_COM_SIZE),
     directory("DOS", DOS_INSTALLED, [
       opaqueFile("HIMEM.SYS", DOS_RELEASED, HIMEM_SYS_SIZE),

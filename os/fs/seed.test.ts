@@ -19,6 +19,7 @@ const everyEntry = (entries: readonly Entry[]): readonly Entry[] =>
     entry.kind === "directory" ? [entry, ...everyEntry(entry.entries)] : [entry],
   );
 
+const BOOT_FILES = ["IO.SYS", "MSDOS.SYS"];
 const all = everyEntry(fs.root.entries);
 
 const names = (path: string) => {
@@ -39,6 +40,8 @@ const textOf = (path: string) => {
 describe("Contents of drive C", () => {
   test("Seeded tree", () => {
     expect(names("C:\\")).toEqual([
+      "IO.SYS",
+      "MSDOS.SYS",
       "COMMAND.COM",
       "DOS",
       "CONFIG.SYS",
@@ -49,7 +52,7 @@ describe("Contents of drive C", () => {
     ]);
     expect(names("C:\\DOS")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM"]);
     expect(names("C:\\ODDWARE")).toEqual(["WORM.EXE"]);
-    expect(all).toHaveLength(12);
+    expect(all).toHaveLength(14);
   });
 
   test("ODDWARE holds only the game", () => {
@@ -58,6 +61,8 @@ describe("Contents of drive C", () => {
 
   test("the system and programme files are opaque, the others text", () => {
     [
+      "C:\\IO.SYS",
+      "C:\\MSDOS.SYS",
       "C:\\COMMAND.COM",
       "C:\\DOS\\HIMEM.SYS",
       "C:\\DOS\\MEM.EXE",
@@ -85,13 +90,22 @@ describe("Contents of drive C", () => {
 
     files.forEach((file) => {
       expect(fileSize(file)).toBeGreaterThan(0);
-      expect(file.attributes).toEqual({
-        readOnly: false,
-        hidden: false,
-        system: false,
-        archive: true,
-      });
+      expect(file.attributes).toEqual(
+        BOOT_FILES.includes(file.name)
+          ? { readOnly: true, hidden: true, system: true, archive: false }
+          : { readOnly: false, hidden: false, system: false, archive: true },
+      );
     });
+  });
+
+  test("The system files are hidden and dated like COMMAND.COM", () => {
+    const [ioSys, msdosSys, commandCom] = fs.root.entries;
+
+    expect([ioSys.name, msdosSys.name]).toEqual(BOOT_FILES);
+    expect(content("C:\\IO.SYS")).toEqual({ kind: "opaque", size: 40_566 });
+    expect(content("C:\\MSDOS.SYS")).toEqual({ kind: "opaque", size: 38_138 });
+    expect(ioSys.modified).toEqual(commandCom.modified);
+    expect(msdosSys.modified).toEqual(commandCom.modified);
   });
 
   test("Seeded names are valid", () => {

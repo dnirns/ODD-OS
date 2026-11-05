@@ -214,7 +214,7 @@ describe("Directory listing layout", () => {
     const [files, free] = printed("dir").slice(-2);
 
     expect(files).toMatch(/^ +5 file\(s\) +[\d,]+ bytes$/);
-    expect(free).toMatch(/^ +356,106,240 bytes free$/);
+    expect(free).toMatch(/^ +356,024,320 bytes free$/);
   });
 });
 
@@ -358,9 +358,11 @@ describe("Directory listing errors", () => {
   });
 
   test("an unsupported switch lists nothing", () => {
-    expect(printed("dir /o")).toEqual(["Invalid switch"]);
-    expect(printed("dir /w /a")).toEqual(["Invalid switch"]);
-    expect(printed("dir /s")).toEqual(["Invalid switch"]);
+    expect(printed("dir /q")).toEqual(["Invalid switch"]);
+    expect(printed("dir /w /x")).toEqual(["Invalid switch"]);
+    expect(printed("dir /ax")).toEqual(["Invalid switch"]);
+    expect(printed("dir /ox")).toEqual(["Invalid switch"]);
+    expect(printed("dir /-q")).toEqual(["Invalid switch"]);
   });
 
   test("two paths", () => {

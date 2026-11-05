@@ -1,13 +1,15 @@
 import { changeDirectory } from "../fs/disk";
 import { freeBytes } from "../fs/freeSpace";
-import { findEntries } from "../fs/operations";
 import { hasWildcard } from "../fs/names";
 import { resolvePath } from "../fs/path";
 import type { FsError } from "../fs/types";
 import { MACHINE } from "../machine";
 import { INVALID_DRIVE, INVALID_SWITCH, print, TOO_MANY_PARAMETERS } from "../programs/output";
 import type { CommandContext, CommandResult } from "./commands";
-import { listingLines } from "./dir";
+import { dirListing } from "./dirListing";
+import { applyDirSwitches, presetOptions } from "./dirSwitches";
+import { environmentOf } from "./environmentCommands";
+import { getVariable } from "../environment/environment";
 import { opaqueNoise } from "./noise";
 import type { ParsedCommand } from "./parse";
 
@@ -68,24 +70,27 @@ const dirMessage = (error: FsError) => {
 
 export const runDir = (
   { switches, params }: ParsedCommand,
-  { disk }: CommandContext,
+  context: CommandContext,
 ): CommandResult => {
-  if (switches.some((option) => option !== "/W" && option !== "/P")) {
-    return print(INVALID_SWITCH);
-  }
+  const { disk } = context;
+  const preset = presetOptions(getVariable(environmentOf(context), "DIRCMD"));
+  const options = applyDirSwitches(preset, switches);
+
+  if (options === undefined) return print(INVALID_SWITCH);
   if (new Set(switches).size !== switches.length || params.length > 1) {
     return print(TOO_MANY_PARAMETERS);
   }
 
-  const found = findEntries(disk.filesystem, disk.cwd, params[0] ?? "");
-  if (!found.ok) return print(dirMessage(found.error));
+  const listing = dirListing(
+    disk.filesystem,
+    disk.cwd,
+    params[0] ?? "",
+    options,
+    freeBytes(disk.filesystem, MACHINE.fixedDiskMb),
+  );
+  if (!listing.ok) return print(dirMessage(listing.error));
 
-  const lines = listingLines(found.value, {
-    wide: switches.includes("/W"),
-    free: freeBytes(disk.filesystem, MACHINE.fixedDiskMb),
-  });
-
-  return switches.includes("/P") ? { type: "page", lines } : print(...lines);
+  return options.page ? { type: "page", lines: listing.lines } : print(...listing.lines);
 };
 
 export const DIR_SUMMARY = "Displays a list of files and subdirectories in a directory.";
@@ -93,12 +98,30 @@ export const DIR_SUMMARY = "Displays a list of files and subdirectories in a dir
 export const DIR_HELP: readonly string[] = [
   DIR_SUMMARY,
   "",
-  "DIR [drive:][path][filename] [/P] [/W]",
+  "DIR [drive:][path][filename] [/A[[:]attributes]] [/B] [/C] [/CH] [/L]",
+  "    [/O[[:]sortorder]] [/P] [/S] [/W]",
   "",
   "  [drive:][path][filename]",
   "              Specifies drive, directory, and/or files to list.",
+  "",
+  "  /A          Displays files with specified attributes.",
+  "  attributes   D  Directories                R  Read-only files",
+  "               H  Hidden files               A  Files ready for archiving",
+  "               S  System files               -  Prefix meaning not",
+  "  /B          Uses bare format (no heading information or summary).",
+  "  /C          Displays the file compression ratio.",
+  "  /CH         Uses cluster allocation unit size to calculate the ratio.",
+  "  /L          Uses lowercase.",
+  "  /O          List by files in sorted order.",
+  "  sortorder    N  By name (alphabetic)       S  By size (smallest first)",
+  "               E  By extension (alphabetic)  D  By date & time (earliest first)",
+  "               G  Group directories first    -  Prefix to reverse order",
   "  /P          Pauses after each screenful of information.",
+  "  /S          Displays files in specified directory and all subdirectories.",
   "  /W          Uses wide list format.",
+  "",
+  "Switches may be preset in the DIRCMD environment variable. Override preset",
+  "switches by prefixing any switch with - (hyphen)--for example, /-W.",
 ];
 
 const CTRL_Z = "\x1A";
