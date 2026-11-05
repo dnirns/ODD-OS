@@ -30,6 +30,8 @@ const HIMEM_SYS_SIZE = 29_104;
 const MEM_EXE_SIZE = 32_502;
 const DOSKEY_COM_SIZE = 5_861;
 const HELP_COM_SIZE = 5_527;
+// From memory of the DOS 6 file, not checked against a disk.
+const ATTRIB_EXE_SIZE = 11_165;
 const WORM_EXE_SIZE = 23_744;
 
 // Read-only, hidden and system, as on a bootable DOS disk. Nothing runs them.
@@ -81,6 +83,7 @@ export const createFilesystem = (): Filesystem => ({
       opaqueFile("MEM.EXE", DOS_RELEASED, MEM_EXE_SIZE),
       opaqueFile("DOSKEY.COM", DOS_RELEASED, DOSKEY_COM_SIZE),
       opaqueFile("HELP.COM", DOS_RELEASED, HELP_COM_SIZE),
+      opaqueFile("ATTRIB.EXE", DOS_RELEASED, ATTRIB_EXE_SIZE),
     ]),
     textFile("CONFIG.SYS", SYSTEM_CONFIGURED, CONFIG_SYS),
     textFile("AUTOEXEC.BAT", SYSTEM_CONFIGURED, AUTOEXEC_BAT),

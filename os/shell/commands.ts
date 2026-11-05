@@ -285,7 +285,7 @@ export const runCommand = (
 
   return runExecutable(
     token,
-    parseArguments(rest),
+    { ...parseArguments(rest), rest },
     {
       disk,
       clock,

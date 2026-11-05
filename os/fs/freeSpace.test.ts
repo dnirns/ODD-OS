@@ -40,8 +40,8 @@ describe("Free space", () => {
     expect(freeBytes(done(deleteFile(seeded, "C:\\", "README.TXT")), MB)).toBe(before + CLUSTER);
   });
 
-  test("the seeded disk has the data area less 36 clusters", () => {
-    expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 36) * CLUSTER);
+  test("the seeded disk has the data area less 38 clusters", () => {
+    expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 38) * CLUSTER);
   });
 
   test("is a multiple of the cluster size", () => {

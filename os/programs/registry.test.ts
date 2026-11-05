@@ -88,7 +88,7 @@ describe("The registry and the disk agree", () => {
     };
 
     executablePaths(filesystem.root.entries).forEach((path) => {
-      const output = runExecutable(path, { tail: "", params: [], switches: ["/?"] }, context, PROGRAMMES);
+      const output = runExecutable(path, { rest: "", tail: "", params: [], switches: ["/?"] }, context, PROGRAMMES);
 
       expect(output).not.toEqual({ type: "print", lines: [NO_BEHAVIOUR] });
     });

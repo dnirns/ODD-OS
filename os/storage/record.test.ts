@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { diskChanges } from "../fs/changes";
 import { createDisk } from "../fs/disk";
 import { ARCHIVE, NO_ATTRIBUTES, textFile } from "../fs/entries";
-import { createDirectory, deleteFile, readFile, writeFile } from "../fs/operations";
+import { createDirectory, deleteFile, readFile, setAttributes, writeFile } from "../fs/operations";
 import { createFilesystem } from "../fs/seed";
 import { FORMAT, readRecord, startingDisk, toRecord } from "./record";
 
@@ -164,6 +164,15 @@ describe("startingDisk", () => {
     const stored = structuredClone(toRecord(diskChanges(createFilesystem(), deleted.value)));
 
     expect(startingDisk({ kind: "read", value: stored }).disk.filesystem).toEqual(deleted.value);
+  });
+
+  test("an attribute-only change survives storage", () => {
+    const hidden = setAttributes(createFilesystem(), "C:\\", "README.TXT", { ...ARCHIVE, hidden: true });
+    if (!hidden.ok) throw new Error(hidden.error);
+
+    const stored = structuredClone(toRecord(diskChanges(createFilesystem(), hidden.value)));
+
+    expect(startingDisk({ kind: "read", value: stored }).disk.filesystem).toEqual(hidden.value);
   });
 
   test("valid changes are laid over the shipped disk, saving", () => {

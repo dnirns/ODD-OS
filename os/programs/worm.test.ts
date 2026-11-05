@@ -25,7 +25,7 @@ const context = (now: number) => ({
   files: programmeFiles("C:\\ODDWARE", createClock(0)),
 });
 
-const launch = (now = 1) => WORM.start({ tail: "", params: [], switches: [] }, context(now));
+const launch = (now = 1) => WORM.start({ rest: "", tail: "", params: [], switches: [] }, context(now));
 
 const key = (pressed: ProgrammeKey): ProgrammeEvent => ({ type: "key", key: pressed, now: 0 });
 const press = (type: Exclude<ProgrammeKey["type"], "char">) => key({ type } as ProgrammeKey);
@@ -68,7 +68,7 @@ describe("Launching", () => {
   });
 
   test("arguments are ignored", () => {
-    const withArguments = WORM.start({ tail: " /x foo", params: ["foo"], switches: ["/X"] }, context(7));
+    const withArguments = WORM.start({ rest: " /x foo", tail: "/x foo", params: ["foo"], switches: ["/X"] }, context(7));
 
     expect(withArguments.screen).toEqual(launch(7).screen);
   });
@@ -309,7 +309,7 @@ describe("Log write failures", () => {
 
   const launchOn = (entry: Entry) =>
     WORM.start(
-      { tail: "", params: [], switches: [] },
+      { rest: "", tail: "", params: [], switches: [] },
       {
         ...context(1),
         disk: { filesystem: { root: { ...createDisk().filesystem.root, entries: [...createDisk().filesystem.root.entries, entry] } }, cwd: "C:\\ODDWARE" },
@@ -399,7 +399,7 @@ const diskWith = ({ hi, log }: { readonly hi?: Entry; readonly log?: Entry }): D
 };
 
 const launchWith = (files: { readonly hi?: Entry; readonly log?: Entry }) =>
-  WORM.start({ tail: "", params: [], switches: [] }, { ...context(1), disk: diskWith(files) });
+  WORM.start({ rest: "", tail: "", params: [], switches: [] }, { ...context(1), disk: diskWith(files) });
 
 const storedHi = (text: string, readOnly = false) => textFile("WORM.HI", WHEN, text, { ...ARCHIVE, readOnly });
 

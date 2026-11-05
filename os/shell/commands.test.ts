@@ -30,7 +30,7 @@ const clockAfter = (result: CommandResult) => {
 };
 
 describe("unknown commands", () => {
-  test.each(["foo /x", "attrib a b", "worm.exe", "constructor", "__proto__", "/x", ",;", "c:ver"])("rejects %j", (line) => {
+  test.each(["foo /x", "xcopy a b", "worm.exe", "constructor", "__proto__", "/x", ",;", "c:ver"])("rejects %j", (line) => {
     expect(printed(line)).toEqual(["Bad command or file name"]);
   });
 });
@@ -62,6 +62,7 @@ describe("HELP", () => {
     expect(result.type).toBe("page");
     expect(heading).toBe("For more information on a specific command, type HELP command-name");
     expect(rows.map((row) => row.split(" ")[0])).toEqual([
+      "ATTRIB",
       "CD",
       "CHDIR",
       "CLS",

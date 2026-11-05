@@ -357,6 +357,30 @@ export const renameFile = (
   );
 };
 
+// Replaces the attributes of a file or directory, keeping its name, place,
+// contents and time. Read-only entries may change: that is how the attribute
+// is cleared. The root has no attributes to change.
+export const setAttributes = (
+  fs: Filesystem,
+  cwd: string,
+  path: string,
+  attributes: Attributes,
+): Result<Filesystem> => {
+  const located = locate(fs, cwd, path);
+
+  if (located.kind === "error") return fail(located.error);
+  if (located.kind === "missing") return fail("FileNotFound");
+
+  const { entry, names } = located;
+  if (names.length === 0) return fail("AccessDenied");
+
+  return ok(
+    withEntries(fs, names.slice(0, -1), (entries) =>
+      entries.map((existing) => (existing === entry ? { ...entry, attributes } : existing)),
+    ),
+  );
+};
+
 export const writeFile = (
   fs: Filesystem,
   cwd: string,

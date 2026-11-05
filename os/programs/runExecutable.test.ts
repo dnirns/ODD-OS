@@ -33,6 +33,7 @@ const disk = (cwd = "C:\\"): Disk => ({
 });
 
 const args = (...switches: string[]): ProgrammeArgs => ({
+  rest: ` ${switches.join(" ")}`,
   tail: switches.join(" "),
   params: [],
   switches,

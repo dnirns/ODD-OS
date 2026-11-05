@@ -92,3 +92,33 @@ describe("Written files carry the DOS time", () => {
     expect(resolved.ok && resolved.value.entry.modified.toISOString()).toBe("1993-11-03T16:52:00.000Z");
   });
 });
+
+describe("Programmes change attributes through the runtime", () => {
+  const HIDDEN = { ...ARCHIVE, hidden: true };
+  const attributesAt = (result: ReturnType<typeof files.setAttributes>, path: string) => {
+    if (!result.ok) return result.error;
+    const found = resolvePath(result.value.filesystem, "C:\\", path);
+    return found.ok ? found.value.entry.attributes : found.error;
+  };
+
+  test("Anywhere on the drive", () => {
+    expect(attributesAt(files.setAttributes(disk(), "C:\\DOS", HIDDEN), "C:\\DOS")).toEqual(HIDDEN);
+    expect(attributesAt(files.setAttributes(disk(), "C:\\ODDWARE\\SUB", HIDDEN), "C:\\ODDWARE\\SUB")).toEqual(
+      HIDDEN,
+    );
+  });
+
+  test("Read-only files may change", () => {
+    expect(attributesAt(files.setAttributes(disk(), "LOCKED.LOG", ARCHIVE), "C:\\LOCKED.LOG")).toEqual(ARCHIVE);
+  });
+
+  test("Missing entry", () => {
+    expect(files.setAttributes(disk(), "C:\\NONE.TXT", HIDDEN)).toEqual({ ok: false, error: "FileNotFound" });
+  });
+
+  test("Only attributes change", () => {
+    const result = files.setAttributes(disk(), "LOCKED.LOG", HIDDEN);
+
+    expect(textAt(result, "C:\\LOCKED.LOG")).toBe("old");
+  });
+});

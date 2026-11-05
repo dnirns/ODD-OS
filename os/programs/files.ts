@@ -1,5 +1,5 @@
 import type { Disk } from "../fs/disk";
-import { writeFile } from "../fs/operations";
+import { setAttributes, writeFile } from "../fs/operations";
 import { formatPath, locate } from "../fs/path";
 import type { Clock } from "../shell/clock";
 import type { ProgrammeFiles } from "./types";
@@ -32,5 +32,11 @@ export const programmeFiles = (home: string, clock: Clock): ProgrammeFiles => ({
     const written = writeFile(disk.filesystem, disk.cwd, path, text, new Date(now + clock.offsetMs));
 
     return written.ok ? { ok: true, value: { ...disk, filesystem: written.value } } : written;
+  },
+  // Attributes are not contents, so the limit on writes does not apply.
+  setAttributes: (disk, path, attributes) => {
+    const changed = setAttributes(disk.filesystem, disk.cwd, path, attributes);
+
+    return changed.ok ? { ok: true, value: { ...disk, filesystem: changed.value } } : changed;
   },
 });

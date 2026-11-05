@@ -1,4 +1,5 @@
 import { readFile } from "../fs/operations";
+import { ATTRIB } from "./attrib";
 import { COMMAND } from "./command";
 import { DOSKEY } from "./doskey";
 import { programmeFiles } from "./files";
@@ -22,6 +23,7 @@ export const NO_BEHAVIOUR = "Program too big to fit in memory";
 
 export const PROGRAMMES: Registry = {
   "C:\\COMMAND.COM": COMMAND,
+  "C:\\DOS\\ATTRIB.EXE": ATTRIB,
   "C:\\DOS\\DOSKEY.COM": DOSKEY,
   "C:\\DOS\\HELP.COM": HELP,
   "C:\\DOS\\MEM.EXE": MEM,

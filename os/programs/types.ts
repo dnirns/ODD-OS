@@ -1,15 +1,18 @@
 import type { Environment } from "../environment/environment";
 import type { Disk } from "../fs/disk";
-import type { Result } from "../fs/types";
+import type { Attributes, Result } from "../fs/types";
 import type { Clock } from "../shell/clock";
 import type { ShellKey } from "../shell/shellKeys";
 import type { Screen } from "../terminal/screen";
-import type { PageResult, PrintResult } from "./output";
+import type { FilesResult, PageResult, PrintResult } from "./output";
 
 // The keys a programme receives are the keys the command line decodes.
 export type ProgrammeKey = ShellKey;
 
 export type ProgrammeArgs = {
+  // Everything after the programme's name, exactly as typed, as MS-DOS hands
+  // a programme its command tail.
+  readonly rest: string;
   readonly tail: string;
   readonly params: readonly string[];
   readonly switches: readonly string[];
@@ -34,10 +37,12 @@ export type LaunchContext = {
   readonly doskeyLoaded?: boolean;
 };
 
-// The only way a programme writes. It takes a disk and returns a new one;
-// the programme returns that disk on exit.
+// The only ways a programme changes the disk. Each takes a disk and returns a
+// new one; the programme returns that disk when it finishes.
 export type ProgrammeFiles = {
   readonly write: (disk: Disk, path: string, text: string, now: number) => Result<Disk>;
+  // Replaces the attributes of a file or directory anywhere on the drive.
+  readonly setAttributes: (disk: Disk, path: string, attributes: Attributes) => Result<Disk>;
 };
 
 // Everything a programme may know and use.
@@ -64,7 +69,7 @@ export type InstallResult = {
   readonly lines: readonly string[];
 };
 
-export type ProgrammeOutput = PrintResult | PageResult | NestResult | InstallResult;
+export type ProgrammeOutput = PrintResult | PageResult | NestResult | InstallResult | FilesResult;
 
 export type ProgrammeEvent =
   | { readonly type: "key"; readonly key: ProgrammeKey; readonly now: number }

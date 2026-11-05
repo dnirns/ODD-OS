@@ -433,8 +433,9 @@ describe("running commands", () => {
     const shell = run(shellAt(0), "help");
 
     expect(rowText(shell.screen, 1)).toContain("type HELP command-name");
-    expect(rowText(shell.screen, 2)).toBe("CD       Displays the name of or changes the current directory.");
-    expect(rowText(shell.screen, 4)).toBe("CLS      Clears the screen.");
+    expect(rowText(shell.screen, 2)).toBe("ATTRIB   Displays or changes file attributes.");
+    expect(rowText(shell.screen, 3)).toBe("CD       Displays the name of or changes the current directory.");
+    expect(rowText(shell.screen, 5)).toBe("CLS      Clears the screen.");
     expect(rowText(shell.screen, 24)).toBe("Press any key to continue . . .");
     expect(shell.input.type).toBe("pause");
 
@@ -854,6 +855,16 @@ describe("commands that change the disk", () => {
     expect(shell.disk).toBe(disk);
     expect(rows(shell, 1, 3)).toEqual(["done", "", PROMPT]);
     expect(shell.input.type).toBe("command");
+  });
+
+  test("a command programme's disk replaces the shell's", () => {
+    const before = shellAt(0);
+    const shell = run(before, "attrib +h readme.txt");
+    const readme = shell.disk.filesystem.root.entries.find((entry) => entry.name === "README.TXT");
+
+    expect(shell.disk.filesystem).not.toBe(before.disk.filesystem);
+    expect(readme?.attributes.hidden).toBe(true);
+    expect(rows(shell, 1, 2)).toEqual(["", PROMPT]);
   });
 });
 
