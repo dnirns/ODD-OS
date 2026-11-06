@@ -79,4 +79,44 @@ describe("The pictures", () => {
 
     expect(counts.size).toBe(2);
   });
+
+  describe("the eye", () => {
+    const at = (frame: readonly (string | undefined)[], row: number, column: number) =>
+      row < 0 || row >= ROWS || column < 0 || column >= COLUMNS ? undefined : frame[row * COLUMNS + column];
+    const cells = (frame: readonly (string | undefined)[], wanted: (color: string | undefined) => boolean) =>
+      frame.flatMap((color, index) => (wanted(color) ? [{ row: Math.floor(index / COLUMNS), column: index % COLUMNS }] : []));
+
+    test.each([1, 2, 3, 99])("its white is held inside a black lid line (seed %i)", (seed) => {
+      const frame = make("eye", seed).frame(0);
+      const white = cells(frame, (color) => color === "white" || color === "light-cyan");
+
+      expect(white.length).toBeGreaterThan(0);
+      for (const { row, column } of white) {
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) expect(at(frame, row + dr, column + dc)).toBeDefined();
+      }
+      expect(cells(frame, (color) => color === "black").length).toBeGreaterThan(white.length * 0.15);
+    });
+
+    test.each([1, 2, 3, 99])("lashes rise above the top lid (seed %i)", (seed) => {
+      const frame = make("eye", seed).frame(0);
+      const firstWhite = (column: number) =>
+        Math.min(...cells(frame, (color) => color === "white").filter((cell) => cell.column === column).map(({ row }) => row));
+      // A lash is a black stroke one cell wide, above the white of its column.
+      const lashes = cells(frame, (color) => color === "black").filter(
+        ({ row, column }) =>
+          at(frame, row, column - 1) === undefined && at(frame, row, column + 1) === undefined && row < firstWhite(column),
+      );
+
+      expect(new Set(lashes.map(({ column }) => column)).size).toBeGreaterThanOrEqual(4);
+    });
+
+    test("it tapers to points: its widest row is far wider than its end rows", () => {
+      const frame = make("eye").frame(0);
+      const widths = Array.from({ length: ROWS }, (_, row) => frame.slice(row * COLUMNS, (row + 1) * COLUMNS).filter((color) => color !== undefined && color !== "black").length);
+      const inner = widths.filter((width) => width > 0);
+
+      expect(Math.max(...inner)).toBeGreaterThan(inner[0] * 2.5);
+      expect(Math.max(...inner)).toBeGreaterThan(inner.at(-1)! * 2.5);
+    });
+  });
 });

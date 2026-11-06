@@ -7,6 +7,7 @@ import {
   analyseDrive,
   applyMove,
   assemblyMoves,
+  condenseMoves,
   gatherMoves,
   MAP_BLOCKS,
   MAP_COLUMNS,
@@ -113,6 +114,16 @@ describe("Moving blocks", () => {
 
     expect(blocks.some((block) => block.kind === "lost")).toBe(false);
     expect(blocks.filter((block) => block.kind === "picture")).toHaveLength(smiley.length);
+  });
+
+  test("condensing rewrites every file block once, ending in one run", () => {
+    const map = analyse();
+    const moves = condenseMoves(map);
+    const blocks = moves.reduce((current, move) => applyMove(current, move), map.blocks);
+
+    expect(moves).toHaveLength(map.movable);
+    expect(moves.map(({ to }) => to)).toEqual(Array.from({ length: map.movable }, (_, block) => map.fixed + block));
+    expect(blocks.flatMap((block, index) => (block.kind === "used" ? [index] : []))).toEqual(moves.map(({ to }) => to));
   });
 
   test("assembly reads each lost cluster once and never writes over one still waiting", () => {

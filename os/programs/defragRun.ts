@@ -12,6 +12,8 @@ import {
   applyMove,
   assemblyMoves,
   type Block,
+  condenseMoves,
+  fileBlocks,
   gatherMoves,
   MAP_BLOCKS,
   MAP_COLUMNS,
@@ -26,13 +28,15 @@ import { createPicture, type Picture, pictureFor } from "./defragPictures";
 import { nextRandom, randomStream } from "./random";
 
 export const TICK_MS = 40;
-export const ANALYSIS_TICKS = 38;
-export const GATHER_INTERVAL = 5;
-export const GATHER_BATCHES = 40;
-export const OVERRUN_TICKS = 60;
-export const ASSEMBLY_INTERVAL = 2;
-export const ASSEMBLY_RAMP = 10;
-export const ASSEMBLY_MOST = 6;
+// A full run lasts about a minute: some 6 s reading the drive, 16 s
+// condensing the files, 5.5 s counting past the end and 35 s for the picture.
+export const ANALYSIS_TICKS = 150;
+export const GATHER_TICKS = 400;
+export const GATHER_SHORTEST = 8;
+export const OVERRUN_TICKS = 140;
+export const ASSEMBLY_INTERVAL = 4;
+export const ASSEMBLY_RAMP = 50;
+export const ASSEMBLY_MOST = 3;
 export const FRAME_TICKS = 4;
 
 export type Method = "full" | "unfragment";
@@ -134,11 +138,25 @@ export type StartOptions = {
   readonly seed: number;
 };
 
+// The picture starts a blank row below the rows the files will fill,
+// counting the block a recovered file adds, and keeps at least
+// SMALLEST_PICTURE rows.
+const SMALLEST_PICTURE = 9;
+
+const pictureTop = (state: Pick<DefragState, "disk" | "capacityMb" | "moveHidden">) => {
+  const { fixed, movable } = fileBlocks({
+    filesystem: state.disk.filesystem,
+    capacityMb: state.capacityMb,
+    moveHidden: state.moveHidden,
+  });
+  return Math.min(Math.ceil((fixed + movable + 1) / MAP_COLUMNS) + 1, MAP_ROWS - SMALLEST_PICTURE);
+};
+
 // A fresh look at the drive: the next picture and lost clusters to suit it.
 const analysed = (state: Omit<DefragState, "map" | "picture" | "number">) => {
   const number = nextChkNumber(state.disk.filesystem);
   const random = randomStream(state.seed);
-  const picture = createPicture(pictureFor(number ?? 0), random, MAP_COLUMNS, MAP_ROWS);
+  const picture = createPicture(pictureFor(number ?? 0), random, MAP_COLUMNS, MAP_ROWS, pictureTop(state));
   const silhouette = picture.frame(0).flatMap((color, index) => (color === undefined ? [] : [index]));
   const map = analyseDrive({
     filesystem: state.disk.filesystem,
@@ -213,7 +231,7 @@ const startOptimizing = (state: DefragState, method: Method): DefragState => ({
   phase: {
     kind: "optimizing",
     stage: "gathering",
-    moves: gatherMoves(state.map),
+    moves: condenseMoves(state.map),
     done: 0,
     pending: [],
     batches: 0,
@@ -257,12 +275,17 @@ const animated = (state: DefragState, frame: number): readonly Block[] => {
   });
 };
 
+// Condensing spreads its batches over GATHER_TICKS, however many blocks
+// there are; the picture starts one block at a time and speeds up.
+const gatherBatches = (moves: number) => Math.max(Math.min(moves, Math.floor(GATHER_TICKS / GATHER_SHORTEST)), 1);
+
 const batchSize = (stage: Stage, moves: number, batches: number) =>
   stage === "gathering"
-    ? Math.max(Math.ceil(moves / GATHER_BATCHES), 1)
+    ? Math.max(Math.ceil(moves / gatherBatches(moves)), 1)
     : Math.min(1 + Math.floor(batches / ASSEMBLY_RAMP), ASSEMBLY_MOST);
 
-const interval = (stage: Stage) => (stage === "gathering" ? GATHER_INTERVAL : ASSEMBLY_INTERVAL);
+const interval = (stage: Stage, moves: number) =>
+  stage === "gathering" ? Math.floor(GATHER_TICKS / gatherBatches(moves)) : ASSEMBLY_INTERVAL;
 
 // One tick of optimization: every interval, the reads begun last time are
 // written and the next reads begin.
@@ -293,7 +316,7 @@ const optimizeTick = (state: DefragState, phase: Extract<Phase, { kind: "optimiz
     };
   }
 
-  if (tick % interval(phase.stage) !== 0) return { ...state, elapsedTicks, phase: { ...phase, tick } };
+  if (tick % interval(phase.stage, phase.moves.length) !== 0) return { ...state, elapsedTicks, phase: { ...phase, tick } };
 
   const blocks = phase.pending.reduce(
     (current, move) =>

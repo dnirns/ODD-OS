@@ -194,24 +194,50 @@ const peace = (random: () => number, columns: number, rows: number) => {
   return Object.assign(shape, { space });
 };
 
-// A watching eye: an almond of white with a cyan iris that looks about.
+// A watching eye: a pointed almond of white inside a black lid line, with
+// lashes above and a cyan iris that looks about. It
+// blinks brown, and the lashes stay.
 const eye = (random: () => number, columns: number, rows: number) => {
-  const height = between(random, rows * 0.4, rows * 0.46);
-  const width = height * between(random, 1.6, 1.85);
-  const iris = between(random, 0.42, 0.5);
+  const height = between(random, rows * 0.4, rows * 0.43);
+  const width = height * between(random, 1.9, 2.1);
+  const iris = between(random, 0.5, 0.58);
   const look = between(random, 0.03, 0.06);
-  const space = { columns, rows, cx: centreColumn(random, columns, width), cy: rows / 2 };
+  const lashes = 4 + Math.floor(random() * 2);
+  // Lower than the middle, to leave room for the lashes.
+  const space = { columns, rows, cx: centreColumn(random, columns, width), cy: rows / 2 + 1 };
+  const column = 1 / CELL_ASPECT;
+
+  // The almond tapers to sharp corners.
+  const inside = (px: number, py: number) => {
+    const x = px / width;
+    return Math.abs(x) <= 1 && Math.abs(py / height) <= (1 - x * x) ** 1.6;
+  };
+
+  // A lash rises two rows from the top lid at each of a few evenly spaced columns.
+  const lash = (px: number, py: number) => {
+    if (py >= 0 || inside(px, py)) return false;
+    const spot = Array.from({ length: lashes }, (_, index) => ((index + 1) / (lashes + 1)) * 1.4 - 0.7).some(
+      (at) => Math.abs(px / width - at) < column / width / 2,
+    );
+    return spot && (inside(px, py + 1) || inside(px, py + 2));
+  };
 
   const shape: Shape = (px, py, frame) => {
-    const x = px / width;
-    const y = py / height;
-    if (Math.abs(x) > 1 || Math.abs(y) > 1 - x * x) return undefined;
+    if (lash(px, py)) return "black";
+    if (!inside(px, py)) return undefined;
+
+    const edge =
+      !inside(px - column, py) ||
+      !inside(px + column, py) ||
+      !inside(px, py - 1) ||
+      !inside(px, py + 1);
+    if (edge) return "black";
     if (every(frame, 60, 4, 30)) return "brown";
 
-    const ix = 0.45 * Math.sin(frame * look);
+    const ix = 0.4 * Math.sin(frame * look);
     // Whole rows only, so that the pupil keeps its shape as it moves.
-    const iy = Math.round(0.15 * Math.sin(frame * look * 1.7) * height) / height;
-    const fromIris = Math.hypot((px - ix * width) / height, y - iy);
+    const iy = Math.round(0.12 * Math.sin(frame * look * 1.7) * height) / height;
+    const fromIris = Math.hypot((px - ix * width) / height, py / height - iy);
 
     if (fromIris < iris * 0.45) return "black";
     if (fromIris < iris) return "light-cyan";
@@ -223,16 +249,20 @@ const eye = (random: () => number, columns: number, rows: number) => {
 
 const GENERATORS = { smiley, alien, yinYang, lavaLamp, peace, eye } as const;
 
-// A picture for a map of `columns` by `rows` cells, varied by `random`.
+// A picture for a map of `columns` by `rows` cells, varied by `random`,
+// drawn in the rows from `top` down.
 export const createPicture = (
   name: PictureName,
   random: () => number,
   columns: number,
   rows: number,
+  top = 0,
 ): Picture => {
-  const shape = GENERATORS[name](random, columns, rows);
+  const shape = GENERATORS[name](random, columns, rows - top);
+  const inner = render(shape.space, shape);
+  const above = Array.from({ length: top * columns }, () => undefined);
 
-  return { name, columns, rows, frame: render(shape.space, shape) };
+  return { name, columns, rows, frame: (frame) => [...above, ...inner(frame)] };
 };
 
 // The cells of a picture's silhouette in reading order.

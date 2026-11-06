@@ -100,12 +100,22 @@ export type AnalysedMap = DriveMap & {
   readonly targets: readonly number[];
 };
 
-export const analyseDrive = ({ filesystem, capacityMb, moveHidden, picture, random }: MapOptions): AnalysedMap => {
+// The blocks DEFRAG will leave at the start of the map: those that never
+// move, then the files and directories gathered after them.
+export const fileBlocks = ({
+  filesystem,
+  capacityMb,
+  moveHidden,
+}: Pick<MapOptions, "filesystem" | "capacityMb" | "moveHidden">) => {
   const { total, bytesPerCluster } = clusterCount(filesystem, capacityMb);
   const clustersPerBlock = Math.max(Math.ceil(total / MAP_BLOCKS), 1);
   const counted = countBlocks(filesystem.root, bytesPerCluster, clustersPerBlock, moveHidden);
   const fixed = Math.min(counted.fixed, MAP_BLOCKS);
-  const movable = Math.min(counted.movable, MAP_BLOCKS - fixed);
+  return { total, clustersPerBlock, fixed, movable: Math.min(counted.movable, MAP_BLOCKS - fixed) };
+};
+
+export const analyseDrive = ({ filesystem, capacityMb, moveHidden, picture, random }: MapOptions): AnalysedMap => {
+  const { total, clustersPerBlock, fixed, movable } = fileBlocks({ filesystem, capacityMb, moveHidden });
 
   const blocks: Block[] = Array.from({ length: MAP_BLOCKS }, (_, index) => (index < fixed ? UNMOVABLE : UNUSED));
   const files = scatteredRuns(fixed, movable, random);
@@ -124,6 +134,8 @@ export const analyseDrive = ({ filesystem, capacityMb, moveHidden, picture, rand
   );
   const lost = Math.min(targetCells.length, sources.length);
   for (const position of sources.slice(0, lost)) blocks[position] = LOST;
+  // Filled in a random order, so the picture is not recognised at once.
+  const targets = shuffled(targetCells, random).slice(0, lost);
 
   return {
     blocks,
@@ -131,7 +143,7 @@ export const analyseDrive = ({ filesystem, capacityMb, moveHidden, picture, rand
     totalClusters: total,
     fixed,
     movable,
-    targets: targetCells.slice(0, lost),
+    targets,
   };
 };
 
@@ -150,7 +162,22 @@ export const gatherMoves = ({ blocks, fixed, movable }: DriveMap): readonly Move
   return gaps.map((to, index) => ({ from: outside[index], to }));
 };
 
-// Assembly: the picture cells in order, each written with a lost cluster.
+// Condensing: every file block rewritten in turn, as DEFRAG rewrites each
+// file whole. A block already in place is rewritten where it is, and each
+// gap is filled with the file block furthest along the map.
+export const condenseMoves = (map: DriveMap): readonly Move[] => {
+  const gaps = gatherMoves(map);
+  let next = 0;
+  return Array.from({ length: map.movable }, (_, block) => {
+    const to = map.fixed + block;
+    if (map.blocks[to].kind === "used") return { from: to, to };
+    const move = gaps[next];
+    next += 1;
+    return move;
+  });
+};
+
+// Assembly: the picture cells in their random order, each written with a lost cluster.
 // One already on its cell is rewritten in place; the others come from the
 // top of the map, and none is ever written over before it has moved.
 export const assemblyMoves = (map: AnalysedMap): readonly Move[] => {

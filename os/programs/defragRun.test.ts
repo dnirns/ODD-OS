@@ -12,6 +12,7 @@ import {
   type DefragState,
   type Method,
   startDefrag,
+  TICK_MS,
   wantsTicks,
 } from "./defragRun";
 import { programmeFiles } from "./files";
@@ -147,12 +148,12 @@ describe("Ordinary optimization", () => {
     const used = state.blocks.flatMap((block, index) => (block.kind === "used" ? [index] : []));
 
     expect(used).toEqual(Array.from({ length: before.map.movable }, (_, block) => before.map.fixed + block));
-    expect(count(state, "lost")).toBe(count(before, "lost"));
+    expect(count(state, "lost")).toBe(state.map.blocks.filter((block) => block.kind === "lost").length);
     expect(chk(state.disk)).toBeUndefined();
   });
 
   test("shows reading and writing while it moves blocks", () => {
-    const states = Array.from({ length: 30 }).reduce<DefragState[]>(
+    const states = Array.from({ length: 120 }).reduce<DefragState[]>(
       (all) => [...all, advanceDefrag(all.at(-1)!, { type: "tick", now: NOW })],
       [press(analysed(), "enter")],
     );
@@ -177,6 +178,27 @@ describe("Ordinary optimization", () => {
 });
 
 describe("The full optimization goes wrong", () => {
+  test("a full run on the seeded disk takes about a minute", () => {
+    const optimizing = press(analysed(), "enter");
+    let current = optimizing;
+    let count = ANALYSIS_TICKS;
+    while (kind(current) !== "holding") {
+      current = advanceDefrag(current, { type: "tick", now: NOW });
+      count += 1;
+    }
+    const seconds = (count * TICK_MS) / 1000;
+
+    expect(seconds).toBeGreaterThan(50);
+    expect(seconds).toBeLessThan(80);
+  });
+
+  test("the picture does not fill from the top down", () => {
+    const state = until(press(analysed(), "enter"), (current) => stage(current) === "assembling");
+    const firstRows = state.phase.kind === "optimizing" ? state.phase.moves.slice(0, 40).map(({ to }) => Math.floor(to / 78)) : [];
+
+    expect(new Set(firstRows).size).toBeGreaterThan(5);
+  });
+
   test("counts past the last cluster before the lost clusters move", () => {
     const state = until(press(analysed(), "enter"), (current) => stage(current) === "overrun");
     const later = ticks(state, 10);
@@ -250,6 +272,42 @@ describe("The full optimization goes wrong", () => {
     if (!written.ok) throw new Error(written.error);
 
     expect(holding(start({ filesystem: written.value, cwd: "C:\\" })).number).toBe(0);
+  });
+});
+
+describe("Where the picture forms", () => {
+  // A disk on which the next recovered file is FILE000n.CHK, so picture n is drawn.
+  const diskFor = (pictures: number, extra = "") => {
+    let filesystem = createDisk().filesystem;
+    for (let number = 0; number < pictures; number += 1) {
+      const written = writeFile(filesystem, "C:\\", chkPath(number), "x", new Date(NOW));
+      if (!written.ok) throw new Error(written.error);
+      filesystem = written.value;
+    }
+    if (extra !== "") {
+      const written = writeFile(filesystem, "C:\\", "C:\\BIG.DAT", extra, new Date(NOW));
+      if (!written.ok) throw new Error(written.error);
+      filesystem = written.value;
+    }
+    return { filesystem, cwd: "C:\\" };
+  };
+
+  const rows = (state: DefragState, wanted: (kind: string) => boolean) =>
+    state.blocks.flatMap((block, index) => (wanted(block.kind) ? [Math.floor(index / 78)] : []));
+
+  test.each([0, 1, 2, 3, 4, 5])("picture %i leaves a blank row below the files", (pictures) => {
+    const held = holding(start(diskFor(pictures)));
+    const lastFileRow = Math.max(...rows(held, (blockKind) => blockKind === "used" || blockKind === "unmovable"));
+
+    expect(Math.min(...rows(held, (blockKind) => blockKind === "picture"))).toBeGreaterThan(lastFileRow + 1);
+  });
+
+  test("a disk with more files moves the picture further down", () => {
+    const held = holding(start(diskFor(0, "x".repeat(20_000_000))));
+    const lastFileRow = Math.max(...rows(held, (blockKind) => blockKind === "used" || blockKind === "unmovable"));
+
+    expect(lastFileRow).toBeGreaterThan(0);
+    expect(Math.min(...rows(held, (blockKind) => blockKind === "picture"))).toBeGreaterThan(lastFileRow + 1);
   });
 });
 
