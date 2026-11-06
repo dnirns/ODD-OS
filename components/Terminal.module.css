@@ -182,8 +182,9 @@
 }
 
 .glass::before {
-  background: rgb(14 14 14);
-  mix-blend-mode: screen;
+  /* Screening grey 14 over a colour equals this white veil (14/255); Safari
+     painted the blended layer opaque over the text, so no blend mode is used. */
+  background: rgb(255 255 255 / 0.0549);
 }
 
 .glass::after {
