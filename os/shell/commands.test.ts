@@ -69,6 +69,7 @@ describe("HELP", () => {
       "COMMAND",
       "COPY",
       "DATE",
+      "DEFRAG",
       "DEL",
       "DIR",
       "DOSKEY",

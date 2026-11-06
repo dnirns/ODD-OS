@@ -55,13 +55,29 @@ const clustersUsed = (directory: DirectoryEntry, clusterBytes: number): number =
     0,
   );
 
-// Bytes free on a FAT16 volume of the given size. The root directory has its
-// own fixed area, so it uses no clusters; every other file and directory is
-// rounded up to whole clusters.
-export const freeBytes = (fs: Filesystem, capacityMb: number): number => {
-  const perCluster = clusterSectors(capacityMb);
-  const clusterBytes = perCluster * SECTOR_BYTES;
-  const free = dataClusters(capacityMb, perCluster) - clustersUsed(fs.root, clusterBytes);
+export type ClusterCount = {
+  readonly total: number;
+  readonly used: number;
+  readonly bytesPerCluster: number;
+};
 
-  return Math.max(free, 0) * clusterBytes;
+// The data clusters of a FAT16 volume of the given size and how many are in
+// use. The root directory has its own fixed area, so it uses no clusters;
+// every other file and directory is rounded up to whole clusters.
+export const clusterCount = (fs: Filesystem, capacityMb: number): ClusterCount => {
+  const perCluster = clusterSectors(capacityMb);
+  const bytesPerCluster = perCluster * SECTOR_BYTES;
+
+  return {
+    total: dataClusters(capacityMb, perCluster),
+    used: clustersUsed(fs.root, bytesPerCluster),
+    bytesPerCluster,
+  };
+};
+
+// Bytes free on a FAT16 volume of the given size.
+export const freeBytes = (fs: Filesystem, capacityMb: number): number => {
+  const { total, used, bytesPerCluster } = clusterCount(fs, capacityMb);
+
+  return Math.max(total - used, 0) * bytesPerCluster;
 };

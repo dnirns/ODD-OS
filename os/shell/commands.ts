@@ -254,7 +254,7 @@ const programmeInfo = (path: string, summary: string, help: readonly string[]): 
 const commandList = (registry: Registry): readonly CommandInfo[] => [
   ...Object.entries(COMMANDS).map(([name, { summary, help }]) => ({ name, summary, help })),
   ...Object.entries(registry).flatMap(([path, programme]) =>
-    programme.kind === "command"
+    programme.summary !== undefined && programme.help !== undefined
       ? [programmeInfo(path, programme.summary, programme.help)]
       : [],
   ),

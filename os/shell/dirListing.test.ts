@@ -88,8 +88,8 @@ describe("/O", () => {
   });
 
   test("/OS and /O-S sort by size with the dot entries first", () => {
-    expect(names(dir("dir /os dos"))).toEqual([".", "..", "HELP.COM", "DOSKEY.COM", "ATTRIB.EXE", "HIMEM.SYS", "MEM.EXE"]);
-    expect(names(dir("dir /o-s dos"))).toEqual([".", "..", "MEM.EXE", "HIMEM.SYS", "ATTRIB.EXE", "DOSKEY.COM", "HELP.COM"]);
+    expect(names(dir("dir /os dos"))).toEqual([".", "..", "HELP.COM", "DOSKEY.COM", "ATTRIB.EXE", "HIMEM.SYS", "MEM.EXE", "DEFRAG.EXE"]);
+    expect(names(dir("dir /o-s dos"))).toEqual([".", "..", "DEFRAG.EXE", "MEM.EXE", "HIMEM.SYS", "ATTRIB.EXE", "DOSKEY.COM", "HELP.COM"]);
   });
 
   test("/OD puts the earliest entry first", () => {
@@ -123,7 +123,7 @@ describe("/B", () => {
   });
 
   test("leaves out the dot entries", () => {
-    expect(dir("dir /b dos")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE"]);
+    expect(dir("dir /b dos")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE", "DEFRAG.EXE"]);
   });
 
   test("wins over /W", () => {
@@ -168,7 +168,7 @@ describe("/S", () => {
 
     expect(total).toBeGreaterThan(0);
     expect(rows[total - 1]).toBe("");
-    expect(rows[total + 1]).toMatch(/^ +11 file\(s\) +[\d,]+ bytes$/);
+    expect(rows[total + 1]).toMatch(/^ +12 file\(s\) +[\d,]+ bytes$/);
     expect(rows[total + 2]).toMatch(/bytes free$/);
     expect(rows.filter((row) => row.endsWith("bytes free"))).toHaveLength(1);
   });
@@ -184,7 +184,7 @@ describe("/S", () => {
       " Directory of C:\\DOS",
       " Directory of C:\\ODDWARE",
     ]);
-    expect(names(rows)).toEqual(["MEM.EXE", "ATTRIB.EXE", "WORM.EXE"]);
+    expect(names(rows)).toEqual(["MEM.EXE", "ATTRIB.EXE", "DEFRAG.EXE", "WORM.EXE"]);
   });
 
   test("shows File not found after the first header when nothing matches", () => {
@@ -198,13 +198,14 @@ describe("/S", () => {
   });
 
   test("with /B prints full paths", () => {
-    expect(dir("dir *.exe /s /b")).toEqual(["C:\\DOS\\MEM.EXE", "C:\\DOS\\ATTRIB.EXE", "C:\\ODDWARE\\WORM.EXE"]);
+    expect(dir("dir *.exe /s /b")).toEqual(["C:\\DOS\\MEM.EXE", "C:\\DOS\\ATTRIB.EXE", "C:\\DOS\\DEFRAG.EXE", "C:\\ODDWARE\\WORM.EXE"]);
     expect(dir("dir /s /b dos")).toEqual([
       "C:\\DOS\\HIMEM.SYS",
       "C:\\DOS\\MEM.EXE",
       "C:\\DOS\\DOSKEY.COM",
       "C:\\DOS\\HELP.COM",
       "C:\\DOS\\ATTRIB.EXE",
+      "C:\\DOS\\DEFRAG.EXE",
     ]);
   });
 

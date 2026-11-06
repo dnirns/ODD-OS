@@ -214,13 +214,13 @@ describe("Directory listing layout", () => {
     const [files, free] = printed("dir").slice(-2);
 
     expect(files).toMatch(/^ +5 file\(s\) +[\d,]+ bytes$/);
-    expect(free).toMatch(/^ +356,007,936 bytes free$/);
+    expect(free).toMatch(/^ +355,926,016 bytes free$/);
   });
 });
 
 describe("Dot entries", () => {
   test("a subdirectory starts with . and ..", () => {
-    expect(dirNames("dir dos")).toEqual([".", "..", "HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE"]);
+    expect(dirNames("dir dos")).toEqual([".", "..", "HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE", "DEFRAG.EXE"]);
     expect(dirRows("dir dos")[0]).toMatch(/^\. +<DIR> +09-14-93 +9:12a$/);
   });
 
@@ -330,7 +330,7 @@ describe("Wildcards in DIR", () => {
   });
 
   test("star matches the dot entries in a subdirectory", () => {
-    expect(dirNames("dir *.*", "C:\\DOS")).toEqual([".", "..", "HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE"]);
+    expect(dirNames("dir *.*", "C:\\DOS")).toEqual([".", "..", "HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE", "DEFRAG.EXE"]);
     expect(dirNames("dir *.sys", "C:\\DOS")).toEqual(["HIMEM.SYS"]);
   });
 });
@@ -396,7 +396,7 @@ describe("Wide listings", () => {
     const rows = printed("dir /w dos");
 
     expect(rows[4].split(/\s+/)).toEqual(["[.]", "[..]", "HIMEM.SYS", "MEM.EXE", "DOSKEY.COM"]);
-    expect(rows[5].split(/\s+/)).toEqual(["HELP.COM", "ATTRIB.EXE"]);
+    expect(rows[5].split(/\s+/)).toEqual(["HELP.COM", "ATTRIB.EXE", "DEFRAG.EXE"]);
   });
 
   test("a switch may come before the path", () => {

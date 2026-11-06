@@ -24,6 +24,7 @@ const disk = (cwd = "C:\\"): Disk => ({
         opaqueFile("MEM.EXE", WHEN, 100),
         opaqueFile("BAD.EXE", WHEN, 100),
         opaqueFile("CRASH.COM", WHEN, 100),
+        opaqueFile("TOOL.EXE", WHEN, 100),
       ]),
       directory("ODDWARE", WHEN, [opaqueFile("GAME.EXE", WHEN, 100)]),
       opaqueFile("ORPHAN.EXE", WHEN, 100),
@@ -70,7 +71,16 @@ const crash: FullscreenProgramme = {
   },
 };
 
+// A fullscreen programme with help, refusing any parameter.
+const tool: FullscreenProgramme = {
+  kind: "fullscreen",
+  summary: "A tool.",
+  help: ["Tool help."],
+  start: (programmeArgs) => (programmeArgs.params.length > 0 ? print("Too many parameters") : running),
+};
+
 const registry: Registry = {
+  "C:\\DOS\\TOOL.EXE": tool,
   "C:\\DOS\\MEM.EXE": mem,
   "C:\\ODDWARE\\GAME.EXE": game,
   "C:\\DOS\\CRASH.COM": crash,
@@ -207,5 +217,18 @@ describe("Fullscreen programmes", () => {
 
   test("a programme that fails to start returns to the prompt", () => {
     expect(run("crash")).toEqual(print());
+  });
+
+  test("/? prints the help of one that has help, without starting it", () => {
+    expect(run("tool", args("/?"))).toEqual(print("Tool help."));
+  });
+
+  test("/? starts one with no help of its own", () => {
+    expect(run("game", args("/?"), "C:\\ODDWARE").type).toBe("launch");
+  });
+
+  test("a refusal prints instead of launching", () => {
+    expect(run("tool", { ...args(), params: ["x"] })).toEqual(print("Too many parameters"));
+    expect(run("tool").type).toBe("launch");
   });
 });

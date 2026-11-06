@@ -7,6 +7,7 @@ const press = (
   modifiers: Partial<KeyInput> = {},
   acceptsEndOfFile = false,
   acceptsBreak = false,
+  acceptsF10 = false,
 ) =>
   toShellKey(
     {
@@ -19,7 +20,26 @@ const press = (
     },
     acceptsEndOfFile,
     acceptsBreak,
+    acceptsF10,
   );
+
+describe("F10", () => {
+  test("is left to the browser at the prompt", () => {
+    expect(press("F10")).toBeUndefined();
+  });
+
+  test("reaches a fullscreen programme", () => {
+    expect(press("F10", {}, false, false, true)).toEqual({ type: "f10" });
+  });
+
+  test("with a modifier it stays with the browser", () => {
+    expect(press("F10", { ctrlKey: true }, false, false, true)).toBeUndefined();
+  });
+
+  test("other function keys stay with the browser in a programme", () => {
+    expect(press("F3", {}, false, false, true)).toBeUndefined();
+  });
+});
 
 describe("The break key", () => {
   test.each(["c", "C", "Pause", "Cancel"])("Ctrl+%s is the break key while a batch runs", (key) => {
@@ -58,7 +78,7 @@ describe("toShellKey", () => {
     ["Insert", "insert"],
     ["PageDown", "pageDown"],
     ["PageUp", "pageUp"],
-    ["Tab", "ignore"],
+    ["Tab", "tab"],
   ])("maps %s to %s", (key, type) => {
     expect(press(key)).toEqual({ type });
   });

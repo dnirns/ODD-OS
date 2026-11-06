@@ -50,9 +50,9 @@ describe("Contents of drive C", () => {
       "README.TXT",
       "CREDITS.TXT",
     ]);
-    expect(names("C:\\DOS")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE"]);
+    expect(names("C:\\DOS")).toEqual(["HIMEM.SYS", "MEM.EXE", "DOSKEY.COM", "HELP.COM", "ATTRIB.EXE", "DEFRAG.EXE"]);
     expect(names("C:\\ODDWARE")).toEqual(["WORM.EXE"]);
-    expect(all).toHaveLength(15);
+    expect(all).toHaveLength(16);
   });
 
   test("ODDWARE holds only the game", () => {
@@ -69,6 +69,7 @@ describe("Contents of drive C", () => {
       "C:\\DOS\\DOSKEY.COM",
       "C:\\DOS\\HELP.COM",
       "C:\\DOS\\ATTRIB.EXE",
+      "C:\\DOS\\DEFRAG.EXE",
       "C:\\ODDWARE\\WORM.EXE",
     ].forEach((path) => {
       expect(content(path)).toMatchObject({ kind: "opaque" });
@@ -84,6 +85,7 @@ describe("Contents of drive C", () => {
     expect(content("C:\\DOS\\DOSKEY.COM")).toEqual({ kind: "opaque", size: 5_861 });
     expect(content("C:\\DOS\\HELP.COM")).toEqual({ kind: "opaque", size: 5_527 });
     expect(content("C:\\DOS\\ATTRIB.EXE")).toEqual({ kind: "opaque", size: 11_165 });
+    expect(content("C:\\DOS\\DEFRAG.EXE")).toEqual({ kind: "opaque", size: 75_033 });
     expect(content("C:\\ODDWARE\\WORM.EXE")).toEqual({ kind: "opaque", size: 23_744 });
   });
 

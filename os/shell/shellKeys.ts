@@ -9,6 +9,7 @@ export type ShellKey =
         | "end"
         | "enter"
         | "escape"
+        | "f10"
         | "home"
         | "ignore"
         | "insert"
@@ -16,6 +17,7 @@ export type ShellKey =
         | "pageDown"
         | "pageUp"
         | "right"
+        | "tab"
         | "up";
     };
 
@@ -41,7 +43,7 @@ const NAMED_KEYS: Readonly<Record<string, ShellKey>> = {
   Insert: { type: "insert" },
   PageDown: { type: "pageDown" },
   PageUp: { type: "pageUp" },
-  Tab: { type: "ignore" },
+  Tab: { type: "tab" },
 };
 
 const COMMAND_KEYS: Readonly<Record<string, ShellKey>> = {
@@ -62,21 +64,29 @@ const isEndOfFileKey = ({ key, ctrlKey, metaKey, altKey, altGraph }: KeyInput) =
 
 const BREAK_KEY = { type: "break" } as const;
 
+const F10_KEY = { type: "f10" } as const;
+
 const isBreakKey = ({ key, ctrlKey, metaKey, altKey, altGraph }: KeyInput) =>
   ctrlKey && !metaKey && !altKey && !altGraph && (key.toLowerCase() === "c" || key === "Pause" || key === "Cancel");
+
+const isF10 = ({ key, ctrlKey, metaKey, altKey, altGraph }: KeyInput) =>
+  key === "F10" && !ctrlKey && !metaKey && !altKey && !altGraph;
 
 // Ctrl+Z and F6 type the end-of-file character only where it is accepted,
 // while `COPY CON` reads a file. Elsewhere the browser keeps them. Ctrl+C and
 // Ctrl+Break are the break key only while a batch file runs; at the prompt
-// the browser keeps Ctrl+C to copy.
+// the browser keeps Ctrl+C to copy. F10 reaches a fullscreen programme only.
 export const toShellKey = (
   input: KeyInput,
   acceptsEndOfFile = false,
   acceptsBreak = false,
+  acceptsF10 = false,
 ): ShellKey | undefined => {
   const { key, ctrlKey, metaKey, altKey, altGraph } = input;
 
-  if (acceptsBreak && isBreakKey(input)) return BREAK_KEY;  if (acceptsEndOfFile && isEndOfFileKey(input)) return END_OF_FILE_KEY;
+  if (acceptsBreak && isBreakKey(input)) return BREAK_KEY;
+  if (acceptsEndOfFile && isEndOfFileKey(input)) return END_OF_FILE_KEY;
+  if (acceptsF10 && isF10(input)) return F10_KEY;
   if (altGraph) return toChar(key, isPrintable);
   if (metaKey && !ctrlKey && !altKey) return COMMAND_KEYS[key];
   if (ctrlKey || metaKey) return undefined;

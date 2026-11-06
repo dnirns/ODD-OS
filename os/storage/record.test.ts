@@ -5,6 +5,10 @@ import { createDisk } from "../fs/disk";
 import { ARCHIVE, NO_ATTRIBUTES, textFile } from "../fs/entries";
 import { createDirectory, deleteFile, readFile, setAttributes, writeFile } from "../fs/operations";
 import { createFilesystem } from "../fs/seed";
+import { chkPath, chkText } from "../programs/defragChk";
+import { createPicture } from "../programs/defragPictures";
+import { MAP_COLUMNS, MAP_ROWS } from "../programs/defragMap";
+import { randomStream } from "../programs/random";
 import { FORMAT, readRecord, startingDisk, toRecord } from "./record";
 
 const NOW = new Date(Date.UTC(1993, 10, 2, 14, 30));
@@ -173,6 +177,19 @@ describe("startingDisk", () => {
     const stored = structuredClone(toRecord(diskChanges(createFilesystem(), hidden.value)));
 
     expect(startingDisk({ kind: "read", value: stored }).disk.filesystem).toEqual(hidden.value);
+  });
+
+  test("a file DEFRAG recovered survives storage, shaded art and all", () => {
+    const picture = createPicture("smiley", randomStream(7), MAP_COLUMNS, MAP_ROWS);
+    const text = chkText(picture, 0);
+    const recovered = writeFile(createFilesystem(), "C:\\", chkPath(0), text, NOW);
+    if (!recovered.ok) throw new Error(recovered.error);
+
+    const stored = structuredClone(toRecord(diskChanges(createFilesystem(), recovered.value)));
+    const restored = startingDisk({ kind: "read", value: stored }).disk.filesystem;
+
+    expect(restored).toEqual(recovered.value);
+    expect(readFile(restored, "C:\\", "FILE0000.CHK")).toEqual({ ok: true, value: { kind: "text", text } });
   });
 
   test("valid changes are laid over the shipped disk, saving", () => {

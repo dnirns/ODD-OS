@@ -7,6 +7,7 @@ import type { Registry } from "../os/programs/types";
 import { createClock } from "../os/shell/clock";
 import {
   acceptsBreak,
+  acceptsF10,
   acceptsEndOfFile,
   batchDelay,
   createShell,
@@ -59,6 +60,7 @@ const ShellScreen = ({ screen, disk, onFilesChange, programmes, startup: mode }:
   const tickMs = tickInterval(state);
   const endOfFile = acceptsEndOfFile(state);
   const breaks = acceptsBreak(state);
+  const f10 = acceptsF10(state);
   const delay = batchDelay(state);
   const { filesystem } = state.disk;
 
@@ -76,7 +78,7 @@ const ShellScreen = ({ screen, disk, onFilesChange, programmes, startup: mode }:
         metaKey: event.metaKey,
         altKey: event.altKey,
         altGraph: event.getModifierState("AltGraph"),
-      }, endOfFile, breaks);
+      }, endOfFile, breaks, f10);
       if (!key) return;
 
       if (key.type !== "escape") event.preventDefault();
@@ -85,7 +87,7 @@ const ShellScreen = ({ screen, disk, onFilesChange, programmes, startup: mode }:
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [endOfFile, breaks]);
+  }, [endOfFile, breaks, f10]);
 
   // A batch file runs one line at a time, so the page stays responsive.
   useEffect(() => {

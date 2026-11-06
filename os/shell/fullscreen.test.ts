@@ -9,7 +9,7 @@ import {
   type Screen,
   writeText,
 } from "../terminal/screen";
-import { createShell, reduceShell, tickInterval, tickShell, type ShellState } from "./shell";
+import { acceptsF10, createShell, reduceShell, tickInterval, tickShell, type ShellState } from "./shell";
 import type { ShellKey } from "./shellKeys";
 
 const NOW = Date.UTC(2026, 10, 1, 12, 0);
@@ -127,6 +127,17 @@ describe("Keyboard ownership", () => {
     expect(after.line).toBe(before.line);
     expect(after.cursor).toBe(before.cursor);
     expect(after.history).toEqual(before.history);
+  });
+
+  test("Tab and F10 reach the programme", () => {
+    const shell = press(launched(), key("tab"), key("f10"));
+
+    expect(rowText(shell.screen, 1)).toBe("KEYS: 2 LAST: f10");
+  });
+
+  test("F10 is decoded only while a programme runs", () => {
+    expect(acceptsF10(launched())).toBe(true);
+    expect(acceptsF10(shellIn("C:\\ODDWARE"))).toBe(false);
   });
 
   test("Escape reaches the programme", () => {

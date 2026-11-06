@@ -71,7 +71,7 @@ describe("Which entries ATTRIB processes", () => {
   });
 
   test("a path", () => {
-    expect(shown("attrib \\dos\\*.exe").map((row) => row.slice(20))).toEqual(["C:\\DOS\\MEM.EXE", "C:\\DOS\\ATTRIB.EXE"]);
+    expect(shown("attrib \\dos\\*.exe").map((row) => row.slice(20))).toEqual(["C:\\DOS\\MEM.EXE", "C:\\DOS\\ATTRIB.EXE", "C:\\DOS\\DEFRAG.EXE"]);
   });
 
   test("from another directory, with a relative path", () => {
@@ -175,6 +175,7 @@ describe("Subdirectories", () => {
     expect(shown("attrib \\*.exe /s").map((row) => row.slice(20))).toEqual([
       "C:\\DOS\\MEM.EXE",
       "C:\\DOS\\ATTRIB.EXE",
+      "C:\\DOS\\DEFRAG.EXE",
       "C:\\ODDWARE\\WORM.EXE",
     ]);
   });

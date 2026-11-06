@@ -1,4 +1,6 @@
-// The rules of WORM.EXE. Pure, with no imports: no screen, keys or clock.
+// The rules of WORM.EXE. Pure: no screen, keys or clock.
+
+import { nextRandom } from "./random";
 
 export const WIDTH = 78;
 export const HEIGHT = 21;
@@ -56,16 +58,6 @@ const sameCell = (a: Cell) => (b: Cell) => a.x === b.x && a.y === b.y;
 const cellIndex = ({ x, y }: Cell) => y * WIDTH + x;
 
 const isOutside = ({ x, y }: Cell) => x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT;
-
-// One step of mulberry32. The state travels with the game, so every
-// position, food included, is determined by the seed.
-export const nextRandom = (seed: number): { readonly value: number; readonly seed: number } => {
-  const state = (seed + 0x6d2b79f5) >>> 0;
-  let value = Math.imul(state ^ (state >>> 15), state | 1);
-  value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
-
-  return { value: ((value ^ (value >>> 14)) >>> 0) / 4294967296, seed: state };
-};
 
 // Picks one free cell uniformly, counting free cells in reading order.
 export const placeFood = (

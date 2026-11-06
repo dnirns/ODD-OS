@@ -584,6 +584,9 @@ export const tickShell = (state: ShellState, now: number): ShellState =>
 export const acceptsEndOfFile = ({ input, running }: ShellState): boolean =>
   running === undefined && input.type === "question" && input.read === "file";
 
+// Whether F10 goes to a fullscreen programme rather than the browser.
+export const acceptsF10 = ({ running }: ShellState): boolean => running !== undefined;
+
 export const tickInterval = ({ running }: ShellState): number | undefined =>
   running?.programme.tickMs;
 
@@ -709,6 +712,8 @@ const reduceKey = (state: ShellState, { key, now }: ShellAction): ShellState => 
     case "enter":
       return submit(state, now);
     case "ignore":
+    case "tab":
+    case "f10":
       return state;
   }
 };

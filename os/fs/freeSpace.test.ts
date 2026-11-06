@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { directory, NO_ATTRIBUTES, opaqueFile, textFile } from "./entries";
-import { freeBytes } from "./freeSpace";
+import { clusterCount, freeBytes } from "./freeSpace";
 import { createDirectory, deleteFile, removeDirectory, writeFile } from "./operations";
 import { createFilesystem } from "./seed";
 import type { Filesystem } from "./types";
@@ -40,8 +40,12 @@ describe("Free space", () => {
     expect(freeBytes(done(deleteFile(seeded, "C:\\", "README.TXT")), MB)).toBe(before + CLUSTER);
   });
 
-  test("the seeded disk has the data area less 38 clusters", () => {
-    expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 38) * CLUSTER);
+  test("the seeded disk has the data area less 48 clusters", () => {
+    expect(freeBytes(seeded, MB)).toBe((DATA_CLUSTERS - 48) * CLUSTER);
+  });
+
+  test("the cluster count gives the data area and the clusters in use", () => {
+    expect(clusterCount(seeded, MB)).toEqual({ total: DATA_CLUSTERS, used: 48, bytesPerCluster: CLUSTER });
   });
 
   test("is a multiple of the cluster size", () => {

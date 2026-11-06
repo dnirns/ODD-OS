@@ -1,6 +1,7 @@
 import { readFile } from "../fs/operations";
 import { ATTRIB } from "./attrib";
 import { COMMAND } from "./command";
+import { DEFRAG } from "./defrag";
 import { DOSKEY } from "./doskey";
 import { programmeFiles } from "./files";
 import { HELP } from "./help";
@@ -24,6 +25,7 @@ export const NO_BEHAVIOUR = "Program too big to fit in memory";
 export const PROGRAMMES: Registry = {
   "C:\\COMMAND.COM": COMMAND,
   "C:\\DOS\\ATTRIB.EXE": ATTRIB,
+  "C:\\DOS\\DEFRAG.EXE": DEFRAG,
   "C:\\DOS\\DOSKEY.COM": DOSKEY,
   "C:\\DOS\\HELP.COM": HELP,
   "C:\\DOS\\MEM.EXE": MEM,
@@ -37,10 +39,11 @@ const directoryOf = (path: string) => {
 };
 
 const launch = (
-  start: () => LaunchResult["running"],
+  start: () => LaunchResult["running"] | PrintResult,
 ): LaunchResult | PrintResult => {
   try {
-    return { type: "launch", running: start() };
+    const started = start();
+    return started.type === "print" ? started : { type: "launch", running: started };
   } catch {
     return print();
   }
@@ -86,7 +89,9 @@ export const runExecutable = (
   };
 
   if (programme.kind === "fullscreen") {
-    return launch(() => programme.start(args, context));
+    return programme.help !== undefined && args.switches.includes("/?")
+      ? print(...programme.help)
+      : launch(() => programme.start(args, context));
   }
 
   return args.switches.includes("/?")

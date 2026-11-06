@@ -32,6 +32,8 @@ const DOSKEY_COM_SIZE = 5_861;
 const HELP_COM_SIZE = 5_527;
 // From memory of the DOS 6 file, not checked against a disk.
 const ATTRIB_EXE_SIZE = 11_165;
+// MS-DOS 6.22's DEFRAG.EXE, from memory; not verified.
+const DEFRAG_EXE_SIZE = 75_033;
 const WORM_EXE_SIZE = 23_744;
 
 // Read-only, hidden and system, as on a bootable DOS disk. Nothing runs them.
@@ -84,6 +86,7 @@ export const createFilesystem = (): Filesystem => ({
       opaqueFile("DOSKEY.COM", DOS_RELEASED, DOSKEY_COM_SIZE),
       opaqueFile("HELP.COM", DOS_RELEASED, HELP_COM_SIZE),
       opaqueFile("ATTRIB.EXE", DOS_RELEASED, ATTRIB_EXE_SIZE),
+      opaqueFile("DEFRAG.EXE", DOS_RELEASED, DEFRAG_EXE_SIZE),
     ]),
     textFile("CONFIG.SYS", SYSTEM_CONFIGURED, CONFIG_SYS),
     textFile("AUTOEXEC.BAT", SYSTEM_CONFIGURED, AUTOEXEC_BAT),

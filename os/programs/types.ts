@@ -98,9 +98,13 @@ export type CommandProgramme = {
   ) => ProgrammeOutput;
 };
 
+// A fullscreen programme with a summary and help is listed by HELP and prints
+// its help for `/?`. `start` may refuse its arguments by printing instead.
 export type FullscreenProgramme = {
   readonly kind: "fullscreen";
-  readonly start: (args: ProgrammeArgs, context: ProgrammeContext) => Running;
+  readonly summary?: string;
+  readonly help?: readonly string[];
+  readonly start: (args: ProgrammeArgs, context: ProgrammeContext) => Running | PrintResult;
 };
 
 export type Programme = CommandProgramme | FullscreenProgramme;

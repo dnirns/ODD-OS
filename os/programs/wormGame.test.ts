@@ -7,7 +7,6 @@ import {
   type Direction,
   type GameState,
   HEIGHT,
-  nextRandom,
   placeFood,
   type Playing,
   POINTS,
@@ -15,6 +14,7 @@ import {
   steer,
   WIDTH,
 } from "./wormGame";
+import { nextRandom } from "./random";
 
 const FAR_AWAY: Cell = { x: 0, y: HEIGHT - 1 };
 

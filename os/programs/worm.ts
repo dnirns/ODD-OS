@@ -157,7 +157,7 @@ const running = (state: WormState): Running => {
   return current;
 };
 
-export const WORM: FullscreenProgramme = {
+export const WORM = {
   kind: "fullscreen",
   start: (_args, { now, disk, files }) => {
     const stored = storedRecord(disk);
@@ -172,4 +172,4 @@ export const WORM: FullscreenProgramme = {
       canWrite: stored.kind !== "unusable",
     });
   },
-};
+} satisfies FullscreenProgramme;
