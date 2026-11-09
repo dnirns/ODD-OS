@@ -1,0 +1,162 @@
+/*
+ * A beige PC keyboard below the monitor. The keys sit on a grid of quarter
+ * units, 60 to a row, and each key's padding is part of its touch target so
+ * there is no dead space between keys.
+ */
+.keyboard {
+  --key-height: min(46px, 11.5vw);
+  position: relative;
+  flex: none;
+  width: 100%;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.case {
+  padding: 6px max(4px, env(safe-area-inset-right))
+    max(6px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+  border-top: 2px solid var(--keyboard-case-edge);
+  background: var(--keyboard-case);
+}
+
+.keys {
+  position: relative;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(60, minmax(0, 1fr));
+  height: var(--key-height);
+}
+
+/* The function and edit keys stand apart from the main block. */
+.row:first-child {
+  margin-bottom: 6px;
+}
+
+.key {
+  appearance: none;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  touch-action: none;
+}
+
+.cap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--keycap-edge);
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  background: var(--keycap);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.55);
+  color: var(--keycap-legend);
+  font-size: calc(var(--key-height) * 0.34);
+  line-height: 1.05;
+  text-align: center;
+}
+
+/* Two-legend keys: the shifted symbol above the plain one. */
+.cap > span:not(.led) {
+  font-size: 0.85em;
+}
+
+.key[data-kind="action"] .cap,
+.key[data-kind="modifier"] .cap {
+  background: var(--keycap-dark);
+  font-size: calc(var(--key-height) * 0.24);
+}
+
+.key[data-pressed] .cap {
+  border-bottom-width: 1px;
+  background: var(--keycap-pressed);
+  box-shadow: none;
+  transform: translateY(2px);
+}
+
+.key[data-kind="action"][data-pressed] .cap,
+.key[data-kind="modifier"][data-pressed] .cap {
+  background: var(--keycap-dark-pressed);
+}
+
+.led {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--keyboard-led-off);
+}
+
+.key[aria-pressed="true"] .led {
+  background: var(--keyboard-led-on);
+  box-shadow: 0 0 4px var(--keyboard-led-on);
+}
+
+.popup {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--keycap-edge);
+  border-bottom-width: 3px;
+  border-radius: 4px;
+  background: var(--keycap);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.6);
+  color: var(--keycap-legend);
+  pointer-events: none;
+}
+
+.tab {
+  appearance: none;
+  position: absolute;
+  bottom: 100%;
+  right: max(12px, env(safe-area-inset-right));
+  width: 52px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--keyboard-case);
+  color: var(--keycap-legend);
+  font: inherit;
+  font-size: 11px;
+  outline: none;
+  touch-action: none;
+}
+
+.keyboard[data-shown="false"] .tab {
+  bottom: calc(100% + env(safe-area-inset-bottom));
+}
+
+/* In landscape there is no room below the screen, so the keyboard lies over it. */
+@media (orientation: landscape) {
+  .keyboard {
+    --key-height: min(40px, 9.5vh);
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+}

@@ -1,0 +1,19 @@
+/* The monitor's stage above, and on touch devices the keyboard below. */
+.computer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The screen sizes itself to this area, whatever the keyboard leaves. */
+.stage {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+}

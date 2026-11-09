@@ -1,6 +1,7 @@
 /*
  * The screen of a VGA monitor: the 80×25 text area, a black overscan border
- * half the font size deep, and the glass laid over both.
+ * half the font size deep, and the glass laid over both. It is sized to the
+ * area it sits in, which is the viewport less any on-screen keyboard.
  *
  * The 9×16 cells are stretched vertically by --stretch so the picture has the
  * 4:3 shape of a CRT. At each fixed size a row is a whole number of pixels
@@ -17,7 +18,7 @@
   border-radius: 1em;
   background: var(--dos-black);
   font-family: var(--font-dos), monospace;
-  font-size: min(100vw / 46, 100dvh / 34.75);
+  font-size: min(100cqw / 46, 100cqh / 34.75);
   font-synthesis: none;
   font-variant-ligatures: none;
   line-height: 1;
@@ -25,63 +26,63 @@
   -webkit-font-smoothing: none;
 }
 
-@media (min-width: 736px) and (min-height: 566px) {
+@container (min-width: 736px) and (min-height: 566px) {
   .screen {
     --stretch: calc(22 / 16);
     font-size: 16px;
   }
 }
 
-@media (min-width: 920px) and (min-height: 695px) {
+@container (min-width: 920px) and (min-height: 695px) {
   .screen {
     --stretch: calc(27 / 20);
     font-size: 20px;
   }
 }
 
-@media (min-width: 1104px) and (min-height: 824px) {
+@container (min-width: 1104px) and (min-height: 824px) {
   .screen {
     --stretch: calc(32 / 24);
     font-size: 24px;
   }
 }
 
-@media (min-width: 1288px) and (min-height: 978px) {
+@container (min-width: 1288px) and (min-height: 978px) {
   .screen {
     --stretch: calc(38 / 28);
     font-size: 28px;
   }
 }
 
-@media (min-width: 1472px) and (min-height: 1107px) {
+@container (min-width: 1472px) and (min-height: 1107px) {
   .screen {
     --stretch: calc(43 / 32);
     font-size: 32px;
   }
 }
 
-@media (min-width: 1656px) and (min-height: 1261px) {
+@container (min-width: 1656px) and (min-height: 1261px) {
   .screen {
     --stretch: calc(49 / 36);
     font-size: 36px;
   }
 }
 
-@media (min-width: 1840px) and (min-height: 1390px) {
+@container (min-width: 1840px) and (min-height: 1390px) {
   .screen {
     --stretch: calc(54 / 40);
     font-size: 40px;
   }
 }
 
-@media (min-width: 2024px) and (min-height: 1519px) {
+@container (min-width: 2024px) and (min-height: 1519px) {
   .screen {
     --stretch: calc(59 / 44);
     font-size: 44px;
   }
 }
 
-@media (min-width: 2208px) and (min-height: 1673px) {
+@container (min-width: 2208px) and (min-height: 1673px) {
   .screen {
     --stretch: calc(65 / 48);
     font-size: 48px;
@@ -143,27 +144,33 @@
   );
 }
 
-@media (min-width: 1104px) and (min-height: 824px) {
+@container (min-width: 1104px) and (min-height: 824px) {
   .scanlines {
     display: block;
   }
 }
 
-@media (min-resolution: 1.5dppx) and (min-width: 736px) and (min-height: 566px) {
-  .scanlines {
-    display: block;
+@media (min-resolution: 1.5dppx) {
+  @container (min-width: 736px) and (min-height: 566px) {
+    .scanlines {
+      display: block;
+    }
   }
 }
 
-@media (min-resolution: 2dppx) and (min-width: 546px) and (min-height: 412px) {
-  .scanlines {
-    display: block;
+@media (min-resolution: 2dppx) {
+  @container (min-width: 546px) and (min-height: 412px) {
+    .scanlines {
+      display: block;
+    }
   }
 }
 
-@media (min-resolution: 3dppx) and (min-width: 364px) and (min-height: 275px) {
-  .scanlines {
-    display: block;
+@media (min-resolution: 3dppx) {
+  @container (min-width: 364px) and (min-height: 275px) {
+    .scanlines {
+      display: block;
+    }
   }
 }
 

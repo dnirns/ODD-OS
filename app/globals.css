@@ -16,6 +16,18 @@
   --dos-yellow: #ffff55;
   --dos-white: #ffffff;
   --screen-background: var(--dos-black);
+
+  /* The on-screen keyboard's beige plastic. */
+  --keyboard-case: #b9b29f;
+  --keyboard-case-edge: #8f8977;
+  --keycap: #e2dccb;
+  --keycap-pressed: #cfc8b5;
+  --keycap-dark: #c4bda9;
+  --keycap-dark-pressed: #b0a995;
+  --keycap-edge: #8a8473;
+  --keycap-legend: #2b2a26;
+  --keyboard-led-off: #4a4a3c;
+  --keyboard-led-on: #5dff4f;
 }
 
 html,
@@ -25,4 +37,10 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--screen-background);
+}
+
+/* Panning is allowed so text can still be selected; pinch and double-tap
+   zoom are not. */
+html {
+  touch-action: pan-x pan-y;
 }
