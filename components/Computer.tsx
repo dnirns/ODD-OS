@@ -18,6 +18,10 @@ import { useMediaQuery } from "./useMediaQuery";
 // Reading the kept files gives up this long after the computer mounts.
 const READ_DEADLINE_MS = 3000;
 
+// A phone on its side, where the keyboard lies over the screen and starts
+// hidden. Keyboard.module.css uses the same query.
+const CRAMPED_QUERY = "(orientation: landscape) and (max-height: 499px)";
+
 const saveFiles = (filesystem: Filesystem) =>
   saveKept(toRecord(diskChanges(createFilesystem(), filesystem)));
 
@@ -63,12 +67,12 @@ const Computer = () => {
   }, []);
 
   const touch = useMediaQuery("(pointer: coarse)");
-  const landscape = useMediaQuery("(orientation: landscape)");
+  const cramped = useMediaQuery(CRAMPED_QUERY);
   // The visitor's own choice, which outlasts rotating the device.
   const [chosen, setChosen] = useState<boolean>();
   // A physical key was pressed; the next touch brings the keyboard back.
   const [physical, setPhysical] = useState(false);
-  const shown = !physical && (chosen ?? !landscape);
+  const shown = !physical && (chosen ?? !cramped);
 
   const toggleKeyboard = useCallback(() => {
     setPhysical(false);

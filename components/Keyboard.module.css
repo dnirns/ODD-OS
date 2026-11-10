@@ -150,13 +150,27 @@
   bottom: calc(100% + env(safe-area-inset-bottom));
 }
 
-/* In landscape there is no room below the screen, so the keyboard lies over it. */
-@media (orientation: landscape) {
+/*
+ * A phone in landscape has no room below the screen, so the keyboard lies
+ * over it. Computer.tsx uses the same query to start the keyboard hidden.
+ */
+@media (orientation: landscape) and (max-height: 499px) {
   .keyboard {
     --key-height: min(40px, 9.5vh);
     position: absolute;
     right: 0;
     bottom: 0;
     left: 0;
+  }
+}
+
+/* A tablet in landscape has room for a full-width keyboard below the screen. */
+@media (orientation: landscape) and (min-height: 500px) {
+  .keyboard {
+    --key-height: min(64px, 6.25vh);
+  }
+
+  .keys {
+    max-width: none;
   }
 }
